@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy.solvers import solve
-from sympy import Symbol
+
 
 ####ERROR HANDLING CLASS####
 

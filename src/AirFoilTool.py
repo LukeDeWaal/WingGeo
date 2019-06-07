@@ -1,11 +1,13 @@
 import numpy as np
 from NumericalTools import derive
+import matplotlib.pyplot as plt
 
 
 class NACAFoil(object):
 
     def __init__(self, code, **kwargs):
 
+        # TODO: Make digit check modular
         code = str(code)
         if len(code) != 4:
             raise ValueError(f"Expected a 4-Digit Input, got a {len(code)}-Digit input")
@@ -16,36 +18,37 @@ class NACAFoil(object):
 
         self.code = code
 
-        # Step Size for Coordinate Calculations.
-        self.dx = 0.0001    # Smaller will have higher accuracy but lower performance
-
         # Chord of the airfoil
         self.c = 1.0
 
-        # If user defined custom values, they are assigned here
-        if 'step' in kwargs.keys():
-            self.dx = kwargs['step'] if type(kwargs['step']) in (int, float) else 0.0001
-
-        if 'chord' in kwargs.keys():
-            self.c = kwargs['chord'] if type(kwargs['chord']) in (int, float) else 1.0
-
-        self.N = int(self.c/self.dx)
-
-class FourDigitNACA(NACAFoil):
-
-    def __init__(self, code: str or int, **kwargs):
-
-        # Initialize Parent NACA Class
-        super().__init__(code=code, **kwargs)
-
+        # Plotting Parameters
+        self.__m = None
+        self.__p = None
+        self.__t = None
         self.__initialize_parameters()
 
         self.__yt = self.__thickness_distribution_functions()
-        self.__yc_p, self.__yc_c = self.__mean_camber_line()
-        self.__theta_p, self.__theta_c = self.__theta_calculation()
+
+        # If user defined custom values, they are assigned here
+        if 'chord' in kwargs.keys():
+            self.c = kwargs['chord'] if type(kwargs['chord']) in (int, float) else 1.0
 
     def __str__(self):
         return f"NACA-{self.code}"
+
+    def __mul__(self, other: int or float):
+
+        if type(other) not in [int, float]:
+            raise TypeError(f"Cannot multiply with type {type(other)}, expected int or float")
+
+        self.c *= other if other >= 0 else 1
+
+    def __add__(self, other: int or float):
+
+        if type(other) not in [int, float]:
+            raise TypeError(f"Cannot add with type {type(other)}, expected int or float")
+
+        self.c += other if other >= -self.c else 0
 
     def __initialize_parameters(self):
 
@@ -59,14 +62,43 @@ class FourDigitNACA(NACAFoil):
                                          0.1260 * (x / self.c) -
                                          0.3515 * (x / self.c) ** 2 +
                                          0.2843 * (x / self.c) ** 3 -
-                                         0.1015 * (x / self.c) ** 4)
+                                         0.1015 * (x / self.c) ** 4) * self.c
 
         return yt
 
+
+class FourDigitNACA(NACAFoil):
+
+    def __init__(self, code: str or int, **kwargs):
+
+        # Initialize Parent NACA Class
+        super().__init__(code=code, **kwargs)
+
+        self.__p = self._NACAFoil__p
+        self.__m = self._NACAFoil__m
+
+        if self.__p == 0 and self.__m == 0:
+            self.__type = 'symmetrical'
+
+        else:
+            self.__type = 'cambered'
+
+        self.__yt = self._NACAFoil__yt
+        self.__yc_p, self.__yc_c = self.__mean_camber_line()
+        self.__theta_p, self.__theta_c = self.__theta_calculation()
+
     def __mean_camber_line(self):
 
-        yc_0 = lambda x: self.__m / (self.__p ** 2) * (2 * self.__p * x - x ** 2)
-        yc_1 = lambda x: self.__m / ((1 - self.__p) ** 2) * (1 - 2 * self.__p + 2 * self.__p * x - x ** 2)
+        if self.__type == 'cambered':
+            yc_0 = lambda x: self.__m / (self.__p ** 2) * (2 * self.__p * x / self.c - (x / self.c)** 2) * self.c
+            yc_1 = lambda x: self.__m / ((1 - self.__p) ** 2) * (1 - 2 * self.__p + 2 * self.__p * x / self.c - (x / self.c) ** 2) * self.c
+
+        elif self.__type == 'symmetrical':
+            yc_0 = lambda x: 0
+            yc_1 = lambda x: 0
+
+        else:
+            raise TypeError("Airfoil type not defined")
 
         return yc_0, yc_1
 
@@ -80,7 +112,7 @@ class FourDigitNACA(NACAFoil):
 
         return theta_p, theta_c
 
-    def calculate_coordinates(self, cosine_spacing: bool = False):
+    def calculate_coordinates(self, cosine_spacing: bool = False, n: int = 50):
 
         data = {
             'XU': [],
@@ -90,10 +122,10 @@ class FourDigitNACA(NACAFoil):
         }
 
         if cosine_spacing is False:
-            xrange = np.linspace(0, self.c, self.N)
+            xrange = np.linspace(0, self.c, n)
 
         elif cosine_spacing is True:
-            xrange = 0.5*(1 - np.cos(np.linspace(0, np.pi, self.N)))*self.c
+            xrange = 0.5*(1 - np.cos(np.linspace(0, np.pi, n)))*self.c
 
         else:
             raise ValueError(f"Expected a Boolean, got {type(cosine_spacing)} instead")
@@ -117,13 +149,31 @@ class FourDigitNACA(NACAFoil):
         return {key: np.array(value) for key, value in data.items()}
 
 
-class FiveDigitNACA(object):
+class FiveDigitNACA(NACAFoil):
 
-    def __init__(self):
-        pass
+    def __init__(self, code, **kwargs):
+
+        # Initialize Parent NACA Class
+        super().__init__(code=code, **kwargs)
+
 
 
 if __name__ == '__main__':
 
-    test = FourDigitNACA(4412)
-    a = test.calculate_coordinates()
+    test4d = FourDigitNACA('1420', chord=4)
+    a = test4d.calculate_coordinates(cosine_spacing=True)
+
+    test5d = FiveDigitNACA(23012, chord=1)
+
+    inputs = {
+        'a': 1,
+        'c': 2,
+        't': 3
+    }
+
+
+    plt.plot(a['XU'], a['YU'], 'ko')
+    plt.plot(a['XL'], a['YL'], 'ko')
+    plt.axis('equal')  # to preserve the aspect ratio of the plot
+    plt.grid()
+    plt.show()
