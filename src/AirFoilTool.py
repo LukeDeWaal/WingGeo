@@ -1,20 +1,20 @@
 import numpy as np
 from NumericalTools import derive
 import matplotlib.pyplot as plt
+import json
 
 
 class NACAFoil(object):
 
-    def __init__(self, code, **kwargs):
+    def __init__(self, code: str or int, n_digits: int, **kwargs):
 
-        # TODO: Make digit check modular
         code = str(code)
-        if len(code) != 4:
-            raise ValueError(f"Expected a 4-Digit Input, got a {len(code)}-Digit input")
+        if len(code) != n_digits:
+            raise ValueError(f"Expected a {n_digits}-Digit Input, got a {len(code)}-Digit input")
         else:
             for char in code:
                 if ord(char) < 48 or ord(char) > 57:
-                    raise TypeError("Expected a 4-Digit Code, got characters instead")
+                    raise TypeError("Expected a numerical code, got characters instead")
 
         self.code = code
 
@@ -66,13 +66,24 @@ class NACAFoil(object):
 
         return yt
 
+    @staticmethod
+    def __theta_calculation(yc_p, yc_c):
+
+        dyc_dx_p = derive(yc_p)
+        dyc_dx_c = derive(yc_c)
+
+        theta_p = lambda x: np.arctan(dyc_dx_p(x))
+        theta_c = lambda x: np.arctan(dyc_dx_c(x))
+
+        return theta_p, theta_c
+
 
 class FourDigitNACA(NACAFoil):
 
     def __init__(self, code: str or int, **kwargs):
 
         # Initialize Parent NACA Class
-        super().__init__(code=code, **kwargs)
+        super().__init__(code=code, n_digits=4, **kwargs)
 
         self.__p = self._NACAFoil__p
         self.__m = self._NACAFoil__m
@@ -85,7 +96,7 @@ class FourDigitNACA(NACAFoil):
 
         self.__yt = self._NACAFoil__yt
         self.__yc_p, self.__yc_c = self.__mean_camber_line()
-        self.__theta_p, self.__theta_c = self.__theta_calculation()
+        self.__theta_p, self.__theta_c = self._NACAFoil__theta_calculation(self.__yc_p, self.__yc_c)
 
     def __mean_camber_line(self):
 
@@ -101,16 +112,6 @@ class FourDigitNACA(NACAFoil):
             raise TypeError("Airfoil type not defined")
 
         return yc_0, yc_1
-
-    def __theta_calculation(self):
-
-        dyc_dx_p = derive(self.__yc_p)
-        dyc_dx_c = derive(self.__yc_c)
-
-        theta_p = lambda x: np.arctan(dyc_dx_p(x))
-        theta_c = lambda x: np.arctan(dyc_dx_c(x))
-
-        return theta_p, theta_c
 
     def calculate_coordinates(self, cosine_spacing: bool = False, n: int = 50):
 
@@ -154,13 +155,13 @@ class FiveDigitNACA(NACAFoil):
     def __init__(self, code, **kwargs):
 
         # Initialize Parent NACA Class
-        super().__init__(code=code, **kwargs)
+        super().__init__(code=code, n_digits=5, **kwargs)
 
 
 
 if __name__ == '__main__':
 
-    test4d = FourDigitNACA('1420', chord=4)
+    test4d = FourDigitNACA('3210', chord=4)
     a = test4d.calculate_coordinates(cosine_spacing=True)
 
     test5d = FiveDigitNACA(23012, chord=1)
