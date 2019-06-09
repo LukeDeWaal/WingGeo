@@ -130,6 +130,8 @@ class Wing(object):
     @staticmethod
     def __array_input_allocation(array: list or np.array, key: str, target: dict or None):
 
+        # TODO: Interpolate the values of array to match discretization
+
         if target is None:
             target = {}
 
@@ -200,7 +202,7 @@ class Wing(object):
         elif twisttype in [list, np.array]:
             self.twist_distribution = self.__array_input_allocation(twist, 'twist', self.twist_distribution)
 
-        elif twisttype is callable:
+        elif callable(twist):
             self.twist_distribution = self.__callable_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__n_steps)
 
         elif twisttype is dict:
@@ -219,7 +221,7 @@ class Wing(object):
         elif dihedraltype in [list, np.array]:
             self.dihedral_distribution = self.__array_input_allocation(dihedral, 'dihedral', self.dihedral_distribution)
 
-        elif dihedraltype is callable:
+        elif callable(dihedral):
             self.dihedral_distribution = self.__callable_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__n_steps)
 
         elif dihedraltype is dict:
@@ -238,7 +240,7 @@ class Wing(object):
         elif sweeptype in [list, np.array]:
             self.sweep_distribution = self.__array_input_allocation(sweep, 'sweep', self.sweep_distribution, )
 
-        elif sweeptype is callable:
+        elif callable(sweep):
             self.sweep_distribution = self.__callable_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__n_steps)
             
         elif sweeptype is dict:
@@ -319,14 +321,44 @@ class Wing(object):
 
         data = {}
 
-        for yi in self.__yrange:
+        for yi, ci in zip(self.__yrange, self.chord_distribution['chord']):
             data[yi] = self.__get_current_airfoil(self.airfoil_distribution, yi, self.b)
+            data[yi]['x'] = data[yi]['x']*-ci
+
+        self.data_container.set_data(data)
+
+    def __shift_wing_forward(self, percent_chord: float = 0.25):
+
+        data = self.data_container.get_dictionary()
+
+        for (yi, values), ci in zip(data.items(), self.chord_distribution['chord']):
+
+            data[yi]['x'] += ci*percent_chord
+
+        self.data_container.set_data(data)
+
+    def __apply_twist(self):
+
+        T = lambda theta: np.array([[np.cos(theta), -np.sin(theta)],
+                                    [np.sin(theta), np.cos(theta)]])
+
+        data = self.data_container.get_dictionary()
+
+        for (yi, values), ti in zip(data.items(), self.twist_distribution['twist']):
+
+            v = np.matmul(T(ti), np.array([values['x'], values['z']]))
+            data[yi]['x'] = v[0, :]
+            data[yi]['z'] = v[1, :]
 
         self.data_container.set_data(data)
 
     def construct(self):
 
         self.__create_initial_wing()
+        self.__shift_wing_forward(percent_chord=0.25)
+        self.__apply_twist()
+        # TODO: Dihedral
+        # TODO: Sweep
 
     def plot_wing(self):
 
@@ -359,9 +391,10 @@ if __name__ == '__main__':
     # }
     # ds.set_data(data_dict)
 
-    W = Wing(10, n_steps=10)
-    W.set_chord(3)
+    W = Wing(20, n_steps=10)
+    W.set_chord(2)
     W.set_dihedral(0)
+    W.set_twist(lambda t: np.pi/6/(t+1))
     W.set_sweep(0)
     W.set_airfoil('e1213')
     W.construct()
