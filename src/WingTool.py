@@ -3,7 +3,75 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from typing import Union
 from NumericalTools import linear_interpolation_nearest_neighbour
-from AirFoilTool import FiveDigitNACA, FourDigitNACA
+from AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
+from colorama import Fore, Style
+
+
+class DataStorage(object):
+
+    def __init__(self):
+
+        self.__data_dict = None
+        self.__data_array = None
+        self.__length = None
+        self.__keys = None
+
+    def get_dictionary(self):
+        return self.__data_dict
+
+    def get_array(self):
+        return self.__data_array
+
+    def __get_y_keys(self):
+        self.__keys = list(self.__data_dict.keys())
+
+    def __array_to_dict(self):
+
+        unique_y = set(self.__data_array[1,:])
+        series_length = 0
+
+        y0 = self.__data_array[1,0]
+        for idx, yi in enumerate(self.__data_array[1,1:]):
+            if yi == y0:
+                continue
+            else:
+                series_length = idx+1
+                break
+
+        for counter, y in enumerate(unique_y):
+            self.__data_dict[y] = {
+                'x': self.__data_array[0, counter*series_length:(counter+1):series_length],
+                'z': self.__data_array[2, counter*series_length:(counter+1):series_length]
+            }
+
+    def __dict_to_array(self):
+
+        ny = len(self.__data_dict)
+        nxz = len(self.__data_dict[self.__keys[0]]['x'])
+
+        self.__data_array = np.zeros((3, ny*nxz))
+
+        for idx1, (y, value) in enumerate(self.__data_dict.items()):
+            for idx2, (x, z) in enumerate(zip(self.__data_dict[y]['x'], self.__data_dict[y]['z'])):
+                self.__data_array[:,idx1*nxz + idx2] = np.array([x, y, z])
+
+    def set_data(self, data: Union[np.array, dict, list]):
+
+        if type(data) == list:
+            data = np.array(data)
+
+        if type(data) == dict:
+
+            self.__data_dict = dict(data)
+            self.__get_y_keys()
+            self.__dict_to_array()
+
+        elif type(data) == np.array:
+
+            self.__data_array = np.array(data)
+            self.__array_to_dict()
+            self.__get_y_keys()
+
 
 class Wing(object):
 
@@ -24,7 +92,8 @@ class Wing(object):
 
         # Final Coordinates of the wing
         self.__n_steps = n_steps
-        self.datapoints = np.zeros((3, self.__n_steps))
+        self.__yrange = np.linspace(0, self.b, self.__n_steps)
+        self.data_container = DataStorage()
 
 
     """
@@ -44,82 +113,38 @@ class Wing(object):
           can also be inputted with the correct key
     """
     @staticmethod
-    def __number_input_allocation(number: int or float or str, span: int or float, key: str,target: dict or None, n_steps: int, airfoil: bool = False):
+    def __number_input_allocation(code: str, span: int or float, key: str, target: dict or None, n_steps: int, airfoil: bool = False):
 
         if target is None:
-            target = {}
+            target = dict()
 
         if airfoil is False:
             target['y'] = np.linspace(0, span, n_steps)
-            target[key] = np.array([number for _ in target['y']])
+            target[key] = np.array([code for _ in target['y']])
 
         elif airfoil is True:
-            number = str(number)
+            target[code] = (0, 1, None, None)
 
-            if len(number) == 4:
-                coordinates = FourDigitNACA(number).calculate_coordinates(cosine_spacing=True)
-
-            elif len(number) == 5:
-                coordinates = FiveDigitNACA(number).calculate_coordinates(cosine_spacing=True)
-
-            else:
-                raise ValueError("Unexpected Input")
-
-            # TODO: This is an incorrect implementation, correct the way coordinates are saved
-            target['x'] = np.concatenate((coordinates['XU'], coordinates['XL'][::-1]))
-            target['y'] = np.linspace(0, span, n_steps)
-            target['z'] = np.concatenate((coordinates['YU'], coordinates['YL'][::-1]))
-
-
+        return target
 
     @staticmethod
-    def __array_input_allocation(array: list or np.array, key: str, target: dict or None, airfoil: bool = False):
+    def __array_input_allocation(array: list or np.array, key: str, target: dict or None):
 
         if target is None:
             target = {}
 
-        if airfoil is False:
+        if type(array) == list:
+            array = np.array(array)
 
-            if type(array) == list:
-                array = np.array(array)
+        if array.shape[0] > array.shape[1]:
+            target[key] = array[:, 0]
+            target["y"] = array[:, 1]
 
-            if array.shape[0] > array.shape[1]:
-                target[key] = array[:, 0]
-                target["y"] = array[:, 1]
+        elif array.shape[0] < array.shape[1]:
+            target[key] = array[0, :]
+            target["y"] = array[1, :]
 
-            elif array.shape[0] < array.shape[1]:
-                target[key] = array[0, :]
-                target["y"] = array[1, :]
-
-        elif airfoil is True:
-
-            if type(array[0][0]) == str:
-                for number in array[0]:
-                    number = str(number)
-
-                    if len(number) == 4:
-                        coordinates = FourDigitNACA(number).calculate_coordinates(cosine_spacing=True)
-
-                    elif len(number) == 5:
-                        coordinates = FiveDigitNACA(number).calculate_coordinates(cosine_spacing=True)
-
-                    else:
-                        raise ValueError("Unexpected Input")
-
-            elif type(array[1][0]) == str:
-                pass
-            #TODO: Lots to finish here
-
-
-            if array.shape[0] > array.shape[1]:
-                target["x"] = array[:, 0]
-                target["y"] = array[:, 1]
-                target["z"] = array[:, 2]
-
-            elif array.shape[0] < array.shape[1]:
-                target["x"] = array[0, :]
-                target["y"] = array[1, :]
-                target["z"] = array[2, :]
+        return target
 
     @staticmethod
     def __callable_input_allocation(function: callable, span: int or float, key: str, target: dict or None, n_steps: int):
@@ -129,36 +154,38 @@ class Wing(object):
 
         target['y'] = np.linspace(0, span, n_steps)
         target[key] = np.array([function(yi) for yi in target['y']])
+
+        return target
         
     @staticmethod
-    def __dictionary_input_allocation(dictionary: dict, key: str, target: dict or None):
+    def __dictionary_input_allocation(dictionary: dict, key: str, target: dict or None, airfoil=False):
         
         if target is None:
             target = {}
 
-        target['y'] = dictionary['y']
-        target[key] = dictionary[key]
+        if airfoil is False:
+            target['y'] = dictionary['y']
+            target[key] = dictionary[key]
+
+        elif airfoil is True:
+
+            for key, value in dictionary.items():
+                target[key] = value
+
+        return target
 
     """
     These methods will be used by the user to create their wing
     """
-    def set_airfoil(self, airfoil: Union[int, str, callable, list, np.array, dict]):
+    def set_airfoil(self, airfoil: Union[str, dict]):
         
         airfoiltype = type(airfoil)
 
-        # TODO: Make airfoil selection process more modular
-        if airfoiltype in [int, str]:
-            airfoil = str(airfoil) if airfoiltype is int else airfoil
-            self.__number_input_allocation(airfoil, self.b, 'airfoil', self.airfoil_distribution, self.__n_steps, airfoil=True)
-
-        elif airfoiltype in [list, np.array]:
-            self.__array_input_allocation(airfoil, 'airfoil', self.airfoil_distribution, airfoil=True)
-
-        elif airfoiltype is callable(airfoil):
-            self.__callable_input_allocation(airfoil, self.b, 'airfoil', self.airfoil_distribution, self.__n_steps)
+        if airfoiltype is str:
+            self.airfoil_distribution = self.__number_input_allocation(airfoil, self.b, 'airfoil', self.airfoil_distribution, self.__n_steps, airfoil=True)
 
         elif airfoiltype is dict:
-            self.__dictionary_input_allocation(airfoil, 'airfoil', self.airfoil_distribution)
+            self.airfoil_distribution = self.__dictionary_input_allocation(airfoil, 'airfoil', self.airfoil_distribution, airfoil=True)
 
         else:
             raise TypeError("Invalid Input")
@@ -168,16 +195,16 @@ class Wing(object):
         twisttype = type(twist)
 
         if twisttype in [int, float]:
-            self.__number_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__n_steps)
+            self.twist_distribution = self.__number_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__n_steps)
 
         elif twisttype in [list, np.array]:
-            self.__array_input_allocation(twist, 'twist', self.twist_distribution)
+            self.twist_distribution = self.__array_input_allocation(twist, 'twist', self.twist_distribution)
 
         elif twisttype is callable:
-            self.__callable_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__n_steps)
+            self.twist_distribution = self.__callable_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__n_steps)
 
         elif twisttype is dict:
-            self.__dictionary_input_allocation(twist, 'twist', self.twist_distribution)
+            self.twist_distribution = self.__dictionary_input_allocation(twist, 'twist', self.twist_distribution)
 
         else:
             raise TypeError("Invalid Input")
@@ -187,16 +214,16 @@ class Wing(object):
         dihedraltype = type(dihedral)
         
         if dihedraltype in [int, float]:
-            self.__number_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__n_steps)
+            self.dihedral_distribution = self.__number_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__n_steps)
 
         elif dihedraltype in [list, np.array]:
-            self.__array_input_allocation(dihedral, 'dihedral', self.dihedral_distribution)
+            self.dihedral_distribution = self.__array_input_allocation(dihedral, 'dihedral', self.dihedral_distribution)
 
         elif dihedraltype is callable:
-            self.__callable_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__n_steps)
+            self.dihedral_distribution = self.__callable_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__n_steps)
 
         elif dihedraltype is dict:
-            self.__dictionary_input_allocation(dihedral, 'dihedral', self.dihedral_distribution, )
+            self.dihedral_distribution = self.__dictionary_input_allocation(dihedral, 'dihedral', self.dihedral_distribution, )
 
         else:
             raise TypeError("Invalid Input")
@@ -206,16 +233,16 @@ class Wing(object):
         sweeptype = type(sweep)
     
         if sweeptype in [int, float]:
-            self.__number_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__n_steps)
+            self.sweep_distribution = self.__number_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__n_steps)
 
         elif sweeptype in [list, np.array]:
-            self.__array_input_allocation(sweep, 'sweep', self.sweep_distribution, )
+            self.sweep_distribution = self.__array_input_allocation(sweep, 'sweep', self.sweep_distribution, )
 
         elif sweeptype is callable:
-            self.__callable_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__n_steps)
+            self.sweep_distribution = self.__callable_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__n_steps)
             
         elif sweeptype is dict:
-            self.__dictionary_input_allocation(sweep, 'sweep', self.sweep_distribution)
+            self.sweep_distribution = self.__dictionary_input_allocation(sweep, 'sweep', self.sweep_distribution)
             
         else:
             raise TypeError("Invalid Input")
@@ -228,23 +255,23 @@ class Wing(object):
             self.cr = c
             self.ct = c
             self.taper = 1
-            self.__number_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__n_steps)
+            self.chord_distribution = self.__number_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__n_steps)
 
         elif ctype in [list, np.array]:
 
-            self.__array_input_allocation(c, 'chord', self.chord_distribution)
+            self.chord_distribution = self.__array_input_allocation(c, 'chord', self.chord_distribution)
             self.cr = self.chord_distribution['chord'][0]
             self.ct = self.chord_distribution['chord'][-1]
             self.taper = self.ct/self.cr
 
-        elif ctype == callable:
+        elif callable(c):
             self.cr = c(0)
             self.ct = c(self.b)
             self.taper = self.ct/self.cr
-            self.__callable_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__n_steps)
+            self.chord_distribution = self.__callable_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__n_steps)
 
         elif ctype == dict:
-            self.__dictionary_input_allocation(c, 'chord', self.chord_distribution)
+            self.chord_distribution = self.__dictionary_input_allocation(c, 'chord', self.chord_distribution)
             self.cr = self.chord_distribution['chord'][0]
             self.ct = self.chord_distribution['chord'][0]
             self.taper = self.ct/self.cr
@@ -252,12 +279,90 @@ class Wing(object):
         else:
             raise TypeError("Invalid Input")
 
-        self.MAC = self.__calculate_MAC(self.chord_distribution['chord'])
+        # self.MAC = self.__calculate_MAC(self.chord_distribution['chord'])
 
 
     """
     Once all desired variables are defined, the wing will have to be 'assembled'. 
     Aka. The 3D coordinates will have to be calculated.
     """
-    def construct(self, double_sided: bool = False):
-        pass
+
+    @staticmethod
+    def __get_current_airfoil(airfoil_distribution: dict, yi: int or float, span: int or float):
+
+        for foil, distr in airfoil_distribution.items():
+            if distr[0] <= yi/span <= distr[1]:
+                if foil[:4].lower() == 'naca':
+                    if ' ' in foil:
+                        code = foil.split(' ')[1]
+
+                    else:
+                        code = foil[4:]
+
+                    if len(code) == 4:
+                        coordinates = FourDigitNACA(code, 1).get_coordinates()
+
+                    elif len(code) == 5:
+                        coordinates = FiveDigitNACA(code, 1).get_coordinates()
+
+                    else:
+                        coordinates = LoadedAirfoil(foil, 1).load_coordinates()
+
+                else:
+                    coordinates = LoadedAirfoil(foil, 1).load_coordinates()
+
+                return coordinates
+
+        raise ValueError("Could not locate position along wing")
+
+    def __create_initial_wing(self):
+
+        data = {}
+
+        for yi in self.__yrange:
+            data[yi] = self.__get_current_airfoil(self.airfoil_distribution, yi, self.b)
+
+        self.data_container.set_data(data)
+
+    def construct(self):
+
+        self.__create_initial_wing()
+
+    def plot_wing(self):
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        arr = self.data_container.get_array()
+        ax.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
+
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        ax.set_zlabel('Z [m]')
+
+
+        ax.set_xlim3d(0, 1)
+        ax.set_ylim3d(0, self.b)
+        ax.set_zlim3d(-0.5, 0.5)
+
+
+if __name__ == '__main__':
+
+    testL = LoadedAirfoil('A63A108C')
+    c = testL.load_coordinates()
+    d = testL.spline_coordinate_calculation('cosine')
+    #
+    # ds = DataStorage()
+    # data_dict = {
+    #     0: c,
+    #     1: c,
+    #     2: c
+    # }
+    # ds.set_data(data_dict)
+
+    W = Wing(10, n_steps=10)
+    W.set_chord(3)
+    W.set_dihedral(0)
+    W.set_sweep(0)
+    W.set_airfoil('e1213')
+    W.construct()
+    W.plot_wing()

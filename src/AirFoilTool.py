@@ -2,11 +2,96 @@ import numpy as np
 from NumericalTools import derive
 import matplotlib.pyplot as plt
 import json, os, sys
+import pandas as pd
+from scipy import interpolate
+from typing import Union
+
+if sys.platform == 'win32':
+    datafiles_path = '\\'.join(os.getcwd().split('\\')[:-1]) + '\\data\\AirfoilCoordinates\\processed'
+
+else:
+    datafiles_path = '/'.join(os.getcwd().split('/')[:-1]) + 'data/AirfoilCoordinates/processed'
+
+AIRFOILS = [file.split('.')[0] for file in os.listdir(datafiles_path)]
 
 
-class NACAFoil(object):
+class AirFoil(object):
 
-    def __init__(self, code: str or int, n_digits: int, **kwargs):
+    def __init__(self, chord: int or float):
+
+        self.chord = chord
+        self.coordinates = None
+
+    @staticmethod
+    def __turning_point(arr):
+
+        oldval = arr[0]
+        for idx, value in enumerate(arr[1:]):
+            if value > oldval:
+                return idx+1
+
+            else:
+                oldval = float(value)
+
+        raise ValueError("Could not find turning point in given arrays. "
+                         "Make sure the coordinates are defined from upper trailing edge to lower trailing edge.")
+
+    def __find_turning_point(self):
+
+        x = self.coordinates['x']
+
+        return self.__turning_point(x)
+
+    def spline_coordinate_calculation(self, xnew: Union[list, np.array, str], k: int = 3, s: int = 0, **kwargs):
+
+        arrsort = lambda xarr, zarr: np.array(
+            [[xi, zi] for xi, zi in sorted(zip(xarr, zarr),
+                                           key=lambda pair:
+                                           pair[0])
+             ]
+        )
+
+        if type(xnew) == list:
+            xnew = np.array(xnew)
+
+        elif type(xnew) == str:
+
+            if 'n' not in kwargs.keys():
+                kwargs['n'] = 50
+
+            xnew = xnew.lower()
+            if xnew == 'uniform' or xnew == 'linear':
+                xnew = np.concatenate((np.linspace(1, 0, kwargs['n']), np.linspace(0, 1, kwargs['n'])))
+
+            elif xnew == 'cosine_spacing' or xnew == 'cosinespacing' or xnew == 'cosine':
+                cosine = 0.5 * (1 - np.cos(np.linspace(0, np.pi, kwargs['n']))) * self.chord
+                xnew = np.concatenate((cosine[::-1], cosine))
+
+        idx_t_old = self.__find_turning_point()
+        idx_t_new = self.__turning_point(xnew)
+
+        upper_coordinates = arrsort(self.coordinates['x'][:idx_t_old], self.coordinates['z'][:idx_t_old])
+        lower_coordinates = arrsort(self.coordinates['x'][idx_t_old:], self.coordinates['z'][idx_t_old:])
+
+        tU, cU, kU = interpolate.splrep(upper_coordinates[:, 0], upper_coordinates[:, 1], k=k, s=s)
+        tL, cL, kL = interpolate.splrep(lower_coordinates[:, 0], lower_coordinates[:, 1], k=k, s=s)
+
+        upper_spline = interpolate.BSpline(tU, cU, kU, extrapolate=False)
+        lower_spline = interpolate.BSpline(tL, cL, kL, extrapolate=False)
+
+        self.coordinates = {
+            'x': xnew,
+            'z': np.concatenate((upper_spline(xnew[:idx_t_new]), lower_spline(xnew[idx_t_new:])))
+        }
+
+        return self.coordinates
+
+
+class NACAFoil(AirFoil):
+
+    def __init__(self, code: str or int, n_digits: int, chord: int or float, **kwargs):
+
+        super().__init__(chord=chord)
 
         self.__n = n_digits
 
@@ -20,9 +105,6 @@ class NACAFoil(object):
 
         self.code = code
 
-        # Chord of the airfoil
-        self.c = 1.0
-
         # Plotting Parameters
         self.__m = None
         self.__p = None
@@ -30,11 +112,8 @@ class NACAFoil(object):
         self.__k1 = None
         self.__initialize_parameters()
 
-        # If user defined custom values, they are assigned here
-        if 'chord' in kwargs.keys():
-            self.c = kwargs['chord'] if type(kwargs['chord']) in (int, float) else 1.0
-
-        self.__yt = self.__thickness_distribution_functions(self.__t, self.c)
+        # Plotting Functions
+        self.__yt = self.__thickness_distribution_functions(self.__t, self.chord)
         self.__yc_p = lambda: None
         self.__yc_c = lambda: None
         self.__theta_p = lambda: None
@@ -56,7 +135,7 @@ class NACAFoil(object):
         if type(other) not in [int, float]:
             raise TypeError(f"Cannot multiply with type {type(other)}, expected int or float")
 
-        self.c *= other if other >= 0 else 1
+        self.chord *= other if other >= 0 else 1
 
     def __add__(self, other: int or float):
         """
@@ -68,7 +147,7 @@ class NACAFoil(object):
         if type(other) not in [int, float]:
             raise TypeError(f"Cannot add with type {type(other)}, expected int or float")
 
-        self.c += other if other >= -self.c else 0
+        self.chord += other if other >= -self.chord else 0
 
     def __initialize_parameters(self):
         """
@@ -137,7 +216,10 @@ class NACAFoil(object):
 
         return theta_p, theta_c
 
-    def calculate_coordinates(self, cosine_spacing: bool = False, n: int = 50):
+    def get_coordinates(self):
+        return self.coordinates
+
+    def load_coordinates(self, cosine_spacing: bool = False, n: int = 25):
 
         data = {
             'XU': [],
@@ -147,39 +229,44 @@ class NACAFoil(object):
         }
 
         if cosine_spacing is False:
-            xrange = np.linspace(0, self.c, n)
+            xrange = np.linspace(0, self.chord, n)
 
         elif cosine_spacing is True:
-            xrange = 0.5*(1 - np.cos(np.linspace(0, np.pi, n)))*self.c
+            xrange = 0.5*(1 - np.cos(np.linspace(0, np.pi, n)))*self.chord
 
         else:
             raise ValueError(f"Expected a Boolean, got {type(cosine_spacing)} instead")
 
         for x in xrange:
 
-            if x <= self.__p * self.c:
+            if x <= self.__p * self.chord:
                 data['XU'].append(x - self.__yt(x) * np.sin(self.__theta_p(x)))
                 data['YU'].append(self.__yc_p(x) + self.__yt(x) * np.cos(self.__theta_p(x)))
 
                 data['XL'].append(x + self.__yt(x) * np.sin(self.__theta_p(x)))
                 data['YL'].append(self.__yc_p(x) - self.__yt(x) * np.cos(self.__theta_p(x)))
 
-            elif self.c >= x > self.c * self.__p:
+            elif self.chord >= x > self.chord * self.__p:
                 data['XU'].append(x - self.__yt(x) * np.sin(self.__theta_c(x)))
                 data['YU'].append(self.__yc_c(x) + self.__yt(x) * np.cos(self.__theta_c(x)))
 
                 data['XL'].append(x + self.__yt(x) * np.sin(self.__theta_c(x)))
                 data['YL'].append(self.__yc_c(x) - self.__yt(x) * np.cos(self.__theta_c(x)))
 
-        return {key: np.array(value) for key, value in data.items()}
+        x = np.concatenate((data['XU'][::-1], data['XL']))
+        z = np.concatenate((data['YU'][::-1], data['YL']))
+
+        self.coordinates = {"x": x, "z": z}
+
+        return self.coordinates
 
 
 class FourDigitNACA(NACAFoil):
 
-    def __init__(self, code: str or int, **kwargs):
+    def __init__(self, code: str or int, chord: int or float, **kwargs):
 
         # Initialize Parent NACA Class
-        super().__init__(code=code, n_digits=4, **kwargs)
+        super().__init__(code=code, chord=chord, n_digits=4, **kwargs)
 
         self.__p = self._NACAFoil__p
         self.__m = self._NACAFoil__m
@@ -197,8 +284,8 @@ class FourDigitNACA(NACAFoil):
     def __mean_camber_line(self):
 
         if self.__type == 'cambered':
-            yc_0 = lambda x: self.__m / (self.__p ** 2) * (2 * self.__p * x / self.c - (x / self.c)** 2) * self.c
-            yc_1 = lambda x: self.__m / ((1 - self.__p) ** 2) * (1 - 2 * self.__p + 2 * self.__p * x / self.c - (x / self.c) ** 2) * self.c
+            yc_0 = lambda x: self.__m / (self.__p ** 2) * (2 * self.__p * x / self.chord - (x / self.chord) ** 2) * self.chord
+            yc_1 = lambda x: self.__m / ((1 - self.__p) ** 2) * (1 - 2 * self.__p + 2 * self.__p * x / self.chord - (x / self.chord) ** 2) * self.chord
 
         elif self.__type == 'symmetrical':
             yc_0 = lambda x: 0
@@ -212,10 +299,10 @@ class FourDigitNACA(NACAFoil):
 
 class FiveDigitNACA(NACAFoil):
 
-    def __init__(self, code, **kwargs):
+    def __init__(self, code: str or int, chord: int or float, **kwargs):
 
         # Initialize Parent NACA Class
-        super().__init__(code=code, n_digits=5, **kwargs)
+        super().__init__(code=code, chord=chord, n_digits=5, **kwargs)
 
         self.__p = self._NACAFoil__p
         self.__m = self._NACAFoil__m
@@ -234,25 +321,79 @@ class FiveDigitNACA(NACAFoil):
         return yc_0, yc_1
 
 
+class LoadedAirfoil(AirFoil):
+
+    def __init__(self, code: str, chord: int or float = 1.0):
+
+        super().__init__(chord=chord)
+
+        self.code = code.lower()
+
+    def load_coordinates(self, cosine_spacing: bool = False, n: int = 25):
+
+        self.coordinates = self.__load_airfoil()
+
+        if cosine_spacing is False:
+            xrange = 'linear'
+
+        elif cosine_spacing is True:
+            xrange = 'cosine'
+
+        # self.coordinates = self.spline_coordinate_calculation(xrange)
+
+        return self.spline_coordinate_calculation(xrange, n=n)
+
+    def __load_airfoil(self):
+
+        if sys.platform == 'win32':
+            datafiles_path = '\\'.join(os.getcwd().split('\\')[:-1]) + '\\data\\AirfoilCoordinates\\processed'
+
+        else:
+            datafiles_path = '/'.join(os.getcwd().split('/')[:-1]) + 'data/AirfoilCoordinates/processed'
+
+        airfoils = AIRFOILS
+
+        if self.code not in airfoils:
+            raise ValueError("Specified Airfoil not found in database")
+
+        else:
+            coordinates = pd.read_csv(datafiles_path+f"\\{self.code}.txt" ,
+                                      sep=',',
+                                      index_col=False,
+                                      skiprows=[0],
+                                      header=None,
+                                      names=['x', 'z'],
+                                      dtype=float)
+
+        return {"x": np.array(coordinates['x'], dtype=float),
+                "z": np.array(coordinates['z'], dtype=float)}
+
 
 if __name__ == '__main__':
 
     test4d = FourDigitNACA('3210', chord=4)
-    a = test4d.calculate_coordinates(cosine_spacing=True)
+    a = test4d.load_coordinates(cosine_spacing=True)
 
     test5d = FiveDigitNACA(23012, chord=1)
-    b = test5d.calculate_coordinates(cosine_spacing=True)
+    b = test5d.load_coordinates(cosine_spacing=True)
+
+    testL = LoadedAirfoil('e1213')
+    c = testL.load_coordinates(cosine_spacing=True)
 
     fig = plt.figure()
-    plt.plot(a['XU'], a['YU'], 'ko')
-    plt.plot(a['XL'], a['YL'], 'ko')
+    plt.plot(a['x'], a['z'], 'ko')
     plt.axis('equal')  # to preserve the aspect ratio of the plot
     plt.grid()
     plt.show()
 
     fig = plt.figure()
-    plt.plot(b['XU'], b['YU'], 'ko')
-    plt.plot(b['XL'], b['YL'], 'ko')
+    plt.plot(b['x'], b['z'], 'ko')
+    plt.axis('equal')  # to preserve the aspect ratio of the plot
+    plt.grid()
+    plt.show()
+
+    fig = plt.figure()
+    plt.plot(c['x'], c['z'], 'ko')
     plt.axis('equal')  # to preserve the aspect ratio of the plot
     plt.grid()
     plt.show()
