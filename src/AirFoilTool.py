@@ -28,7 +28,7 @@ class AirFoil(object):
         oldval = arr[0]
         for idx, value in enumerate(arr[1:]):
             if value > oldval:
-                return idx+1
+                return idx
 
             else:
                 oldval = float(value)

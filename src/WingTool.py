@@ -90,6 +90,8 @@ class Wing(object):
         self.airfoil_distribution = None
         self.dihedral_distribution = None
 
+        self.transformation_order = []
+
         # Final Coordinates of the wing
         self.__n_steps = n_steps
         self.__yrange = np.linspace(0, self.b, self.__n_steps)
@@ -210,6 +212,8 @@ class Wing(object):
 
         else:
             raise TypeError("Invalid Input")
+
+        self.transformation_order.append(self.__apply_twist)
     
     def set_dihedral(self, dihedral: Union[int, float, callable, list, np.array, dict]):
         
@@ -229,6 +233,8 @@ class Wing(object):
 
         else:
             raise TypeError("Invalid Input")
+
+        self.transformation_order.append(self.__apply_dihedral)
         
     def set_sweep(self, sweep: Union[int, float, callable, list, np.array, dict]):
 
@@ -248,6 +254,8 @@ class Wing(object):
             
         else:
             raise TypeError("Invalid Input")
+
+        self.transformation_order.append(self.__apply_sweep)
 
     def set_chord(self, c: Union[int, float, callable, list, np.array, dict]):
 
@@ -324,6 +332,7 @@ class Wing(object):
         for yi, ci in zip(self.__yrange, self.chord_distribution['chord']):
             data[yi] = self.__get_current_airfoil(self.airfoil_distribution, yi, self.b)
             data[yi]['x'] = data[yi]['x']*-ci
+            data[yi]['z'] = data[yi]['z']*ci
 
         self.data_container.set_data(data)
 
@@ -352,13 +361,33 @@ class Wing(object):
 
         self.data_container.set_data(data)
 
+    def __apply_sweep(self):
+        pass
+
+    def __apply_dihedral(self):
+        pass
+
     def construct(self):
 
         self.__create_initial_wing()
         self.__shift_wing_forward(percent_chord=0.25)
-        self.__apply_twist()
-        # TODO: Dihedral
-        # TODO: Sweep
+
+        while self.transformation_order:
+            self.transformation_order.pop()()
+
+    @staticmethod
+    def axisEqual3D(ax):
+        """
+        Taken from: https://stackoverflow.com/questions/8130823/set-matplotlib-3d-plot-aspect-ratio
+        :param ax: fig.gca(projection='3d')
+        """
+        extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
+        sz = extents[:, 1] - extents[:, 0]
+        centers = np.mean(extents, axis=1)
+        maxsize = max(abs(sz))
+        r = maxsize / 2
+        for ctr, dim in zip(centers, 'xyz'):
+            getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
     def plot_wing(self):
 
@@ -371,10 +400,7 @@ class Wing(object):
         ax.set_ylabel('Y [m]')
         ax.set_zlabel('Z [m]')
 
-
-        ax.set_xlim3d(0, 1)
-        ax.set_ylim3d(0, self.b)
-        ax.set_zlim3d(-0.5, 0.5)
+        self.axisEqual3D(ax)
 
 
 if __name__ == '__main__':
@@ -382,19 +408,11 @@ if __name__ == '__main__':
     testL = LoadedAirfoil('A63A108C')
     c = testL.load_coordinates()
     d = testL.spline_coordinate_calculation('cosine')
-    #
-    # ds = DataStorage()
-    # data_dict = {
-    #     0: c,
-    #     1: c,
-    #     2: c
-    # }
-    # ds.set_data(data_dict)
 
-    W = Wing(20, n_steps=10)
-    W.set_chord(2)
+    W = Wing(20, n_steps=40)
+    W.set_chord(lambda y: 3-2.7/20*y)
     W.set_dihedral(0)
-    W.set_twist(lambda t: np.pi/6/(t+1))
+    W.set_twist(0)
     W.set_sweep(0)
     W.set_airfoil('e1213')
     W.construct()
