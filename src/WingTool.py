@@ -75,10 +75,10 @@ class DataStorage(object):
 
 class Wing(object):
 
-    def __init__(self, halfspan: Union[int, float], n_steps: int = 100):
+    def __init__(self, n_steps: int = 100):
 
         # Initialize all parameters defining the wing
-        self.b = halfspan
+        self.b = None
         self.MAC = None
         self.x_LEMAC = None
         self.cr = None
@@ -94,7 +94,7 @@ class Wing(object):
 
         # Final Coordinates of the wing
         self.__n_steps = n_steps
-        self.__yrange = np.linspace(0, self.b, self.__n_steps)
+        self.__yrange = None
         self.data_container = DataStorage()
 
 
@@ -181,6 +181,11 @@ class Wing(object):
     """
     These methods will be used by the user to create their wing
     """
+    def set_span(self, span: Union[int, float]):
+
+        self.b = span
+        self.__yrange = np.linspace(0, self.b, self.__n_steps)
+
     def set_airfoil(self, airfoil: Union[str, dict]):
         
         airfoiltype = type(airfoil)
@@ -405,11 +410,8 @@ class Wing(object):
 
 if __name__ == '__main__':
 
-    testL = LoadedAirfoil('A63A108C')
-    c = testL.load_coordinates()
-    d = testL.spline_coordinate_calculation('cosine')
-
-    W = Wing(20, n_steps=40)
+    W = Wing(n_steps=40)
+    W.set_span(20)
     W.set_chord(lambda y: 3-2.7/20*y)
     W.set_dihedral(0)
     W.set_twist(0)
