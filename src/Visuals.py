@@ -14,7 +14,7 @@ from tkinter import ttk
 from WingTool import Wing
 
 
-LARGE_FONT= ("Verdana", 12)
+LARGE_FONT = ("Verdana", 12)
 
 
 class WingEditor(tk.Tk):
@@ -128,12 +128,8 @@ class WingEditor(tk.Tk):
         self.editor_container.columnconfigure(0, weight=1)
         self.editor_container.columnconfigure(1, weight=1)
 
-        self.refresh_button = ttk.Button(
-            self.editor_container,
-            text="Update",
-            command=self.__update_plot
-        )
-        self.refresh_button.grid(
+        self.lower_box = tk.Frame(self.editor_container)
+        self.lower_box.grid(
             row=len(self.parameter_labels),
             column=0,
             columnspan=2,
@@ -142,32 +138,91 @@ class WingEditor(tk.Tk):
             pady=SPACING[1]
         )
 
+        self.refresh_button = ttk.Button(
+            self.lower_box,
+            text="Update",
+            command=self.__update_plot
+        )
+        self.refresh_button.grid(
+            row=0,
+            column=0
+        )
+        self.cosine_var = tk.BooleanVar()
+        self.cosine_var.set(False)
+
+        self.cosine_box = ttk.Checkbutton(
+            self.lower_box,
+            text="Cosine Spacing",
+            var=self.cosine_var
+        )
+        self.cosine_box.grid(
+            row=0,
+            column=1
+        )
+
         for idx in range(len(self.parameter_labels)+1):
             self.editor_container.rowconfigure(idx, weight=1)
 
     def __extract_inputs(self):
 
+        input_values = {}
+
         for label, var in self.parameter_variables.items():
-            print(var.get())
+
             value = var.get()
 
-            try:
-                value = float(value)
+            if label not in self.parameter_label_texts[-2:]:
+                try:
+                    value = float(value)
 
-            except (ValueError, TypeError):
-                pass
+                except (ValueError, TypeError):
+                    pass
 
-            try:
-                value = int(value)
+            else:
+                try:
+                    value = int(value)
 
-            except (ValueError, TypeError):
-                pass
+                except (ValueError, TypeError):
+                    pass
+
+            input_values[label] = value
+
+        return input_values
+
+    def __plot(self):
+
+        arr = self.wing.data_container.get_array()
+
+        self.plot3d.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
+        self.plot3d.set_xlabel('X [m]')
+        self.plot3d.set_ylabel('Y [m]')
+        self.plot3d.set_zlabel('Z [m]')
+
+        self.wing.axisEqual3D(self.plot3d)
 
     def __update_plot(self):
 
+        self.plot3d.clear()
+
         # self.plot3d.plot(x, y, z)
         print("Updating")
-        self.__extract_inputs()
+        values = self.__extract_inputs()
+        print(values)
+
+        self.wing.set_cosine_spacing(self.cosine_var.get())
+
+        self.wing.set_spanwise_steps(values['Span Steps'])
+        self.wing.set_airfoil_steps(values['Airfoil Steps'])
+
+        self.wing.set_span(values['Span'])
+        self.wing.set_airfoil(values['Airfoils'])
+        self.wing.set_chord(values['Chord'])
+        self.wing.set_sweep(values['Sweep'])
+        self.wing.set_twist(values['Twist'])
+        self.wing.set_dihedral(values['Dihedral'])
+
+        self.wing.construct()
+        self.__plot()
 
 
 if __name__ == "__main__":
