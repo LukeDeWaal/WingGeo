@@ -353,11 +353,12 @@ class LoadedAirfoil(AirFoil):
 
         airfoils = AIRFOILS
 
+        print(self.code)
         if self.code not in airfoils:
             raise ValueError("Specified Airfoil not found in database")
 
         else:
-            coordinates = pd.read_csv(datafiles_path+f"\\{self.code}.txt" ,
+            coordinates = pd.read_csv(datafiles_path+f"\\{self.code}.txt",
                                       sep=',',
                                       index_col=False,
                                       skiprows=[0],

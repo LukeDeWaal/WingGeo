@@ -6,6 +6,7 @@ from NumericalTools import linear_interpolation_nearest_neighbour
 from AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
 from colorama import Fore, Style
 
+# TODO: Make discretization more modular
 
 class DataStorage(object):
 
@@ -394,6 +395,7 @@ class Wing(object):
     def axisEqual3D(ax):
         """
         Taken from: https://stackoverflow.com/questions/8130823/set-matplotlib-3d-plot-aspect-ratio
+        All credits for this method go to the original author.
         :param ax: fig.gca(projection='3d')
         """
         extents = np.array([getattr(ax, 'get_{}lim'.format(dim))() for dim in 'xyz'])
@@ -404,7 +406,7 @@ class Wing(object):
         for ctr, dim in zip(centers, 'xyz'):
             getattr(ax, 'set_{}lim'.format(dim))(ctr - r, ctr + r)
 
-    def plot_wing(self, fig = None):
+    def plot_wing(self, fig=None):
 
         fig = plt.figure() if fig is None else fig
         ax = fig.gca(projection='3d')

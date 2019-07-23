@@ -21,6 +21,20 @@ ROOT_GEO = f"{700}x{600}+{200}+{200}"
 EDITOR_GEO = f"{300}x{500}+{900}+{200}"
 
 
+class Error(Exception):
+   """
+   Base class for other exceptions
+   """
+   pass
+
+
+class InvalidUserInputError(Error):
+    """
+    Raised when user inputs something erroneous
+    """
+    pass
+
+
 # TODO: Create editors
 class EditorWindow(tk.Toplevel):
 
@@ -107,7 +121,7 @@ class EditorWindow(tk.Toplevel):
             for yi in np.linspace(0, span, span_steps):
                 self.text.insert(
                     tk.END,
-                    f"{round(yi, 4)}: e1213\n"
+                    f"{round(yi, 4)}: 'e1213'\n"
                 )
 
         else:
@@ -364,38 +378,42 @@ class WingEditor(tk.Tk):
 
         for name, window in self.editor_windows.items():
             print(name)
-            values[name] = {}
+            values[name] = {
+                'y': [],
+                name.lower(): []
+            }
 
-            if name == 'Airfoils':
-                pass
+            for line in window['window'].text.get('1.0', tk.END).split('\n'):
 
-            else:
-                for line in window['window'].text.get('1.0', tk.END).split('\n'):
+                try:
                     yvals, vals = line.split(':')
 
-                    v = eval(vals)
+                except ValueError:
+                    continue
 
-                    if '-' in yvals:
-                        start, end = yvals.split('-')
-                        start, end = float(start), float(end)
-                        diff = end - start
-                        y = list(np.linspace(start, end, int(diff/self.parameter_variables['Span']*self.parameter_variables['Span Steps'])))
+                v = eval(vals)
 
-                        if callable(v):
-                            for yi in y:
-                                values[name][yi] = v(yi)
+                if '-' in yvals:
+                    start, end = yvals.split('-')
+                    start, end = float(start), float(end)
+                    diff = end - start
+                    y = np.linspace(start, end, int(diff/self.parameter_variables['Span']*self.parameter_variables['Span Steps']))
 
-                        else:
-                            for yi, vi in zip(y, v):
-                                values[name][yi] = vi
+                    if callable(v):
+                        vals = v(y)
 
                     else:
-                        y = float(yvals)
-                        if callable(v):
-                            values[name][y] = v(y)
+                        vals = list(v)
 
-                        else:
-                            values[name][y] = v
+                    for yi, vi in zip(y, vals):
+                        values[name]['y'].append(yi)
+                        values[name][name.lower()].append(vi)
+
+                else:
+                    y = float(yvals)
+
+                    values[name]['y'].append(y)
+                    values[name][name.lower()].append(v(y) if callable(v) else v)
 
         return values
 
@@ -422,6 +440,9 @@ class WingEditor(tk.Tk):
             for label in self.parameter_label_texts[3:]:
                 self.parameter_entries[label].config(state=tk.DISABLED)
 
+    """
+    Methods for opening the editor windows
+    """
     def __open_editor(self, name: str):
 
         if self.editor_windows[name]['window'].text.compare("end-1c", "==", "1.0"):
