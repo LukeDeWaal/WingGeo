@@ -6,6 +6,14 @@ def derive(f, h=10e-5):
     return lambda x: (f(x+h) - f(x))/h
 
 
+def linear_interpolation(x: float or int, p0: tuple or list, p1: tuple or list):
+
+    dx = p1[0] - p0[0]
+    dy = p1[1] - p0[1]
+
+    return dy / dx * (x - p0[0]) + p0[1]
+
+
 def linear_interpolation_nearest_neighbour(X, Y):
 
     def linear_function(x0):

@@ -2,11 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from typing import Union
-from NumericalTools import linear_interpolation_nearest_neighbour
+from NumericalTools import linear_interpolation
 from AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
 from colorama import Fore, Style
 
 # TODO: Make discretization more modular
+
 
 class DataStorage(object):
 
@@ -54,7 +55,7 @@ class DataStorage(object):
 
         for idx1, (y, value) in enumerate(self.__data_dict.items()):
             for idx2, (x, z) in enumerate(zip(self.__data_dict[y]['x'], self.__data_dict[y]['z'])):
-                self.__data_array[:,idx1*nxz + idx2] = np.array([x, y, z])
+                self.__data_array[:, idx1*nxz + idx2] = np.array([x, y, z])
 
     def set_data(self, data: Union[np.array, dict, list]):
 
@@ -76,7 +77,7 @@ class DataStorage(object):
 
 class Wing(object):
 
-    def __init__(self, n_steps: int = 100):
+    def __init__(self):
 
         # Initialize all parameters defining the wing
         self.b = None
@@ -94,7 +95,7 @@ class Wing(object):
         self.transformation_order = []
 
         # Final Coordinates of the wing
-        self.__span_steps = n_steps
+        self.__span_steps = 25
         self.__airfoil_steps = 25
         self.__cosine_spacing = False
         self.__yrange = None
@@ -118,13 +119,13 @@ class Wing(object):
           can also be inputted with the correct key
     """
     @staticmethod
-    def __number_input_allocation(code: str, span: int or float, key: str, target: dict or None, n_steps: int, airfoil: bool = False):
+    def __number_input_allocation(code: str, span_steps: Union[np.array, np.ndarray], key: str, target: dict or None, airfoil: bool = False):
 
         if target is None:
             target = dict()
 
         if airfoil is False:
-            target['y'] = np.linspace(0, span, n_steps)
+            target['y'] = span_steps
             target[key] = np.array([code for _ in target['y']])
 
         elif airfoil is True:
@@ -133,7 +134,7 @@ class Wing(object):
         return target
 
     @staticmethod
-    def __array_input_allocation(array: list or np.array, key: str, target: dict or None):
+    def __array_input_allocation(array: list or np.array, span_steps: Union[np.array, np.ndarray], key: str, target: dict or None):
 
         # TODO: Interpolate the values of array to match discretization
 
@@ -143,58 +144,82 @@ class Wing(object):
         if type(array) == list:
             array = np.array(array)
 
+        new_array = []
+
         if array.shape[0] > array.shape[1]:
-            target[key] = array[:, 0]
-            target["y"] = array[:, 1]
+            for yi in span_steps:
+                for i in range(len(array[:,1])-1):
+
+                    if array[:,1][i+1] > yi >= array[:,1][i]:
+                        new_array.append(linear_interpolation(yi, list(reversed(array[i, :])), list(reversed(array[i+1, :]))))
+
+            target[key] = np.array(new_array)
+            target["y"] = span_steps
 
         elif array.shape[0] < array.shape[1]:
-            target[key] = array[0, :]
-            target["y"] = array[1, :]
+            for yi in span_steps:
+                for i in range(len(array[1, :]) - 1):
+
+                    if array[1, :][i + 1] > yi >= array[1, :][i]:
+                        new_array.append(linear_interpolation(yi, list(reversed(array[:, i])), list(reversed(array[:, i+1]))))
+
+            target[key] = np.array(new_array)
+            target["y"] = span_steps
 
         return target
 
     @staticmethod
-    def __callable_input_allocation(function: callable, span: int or float, key: str, target: dict or None, n_steps: int):
+    def __callable_input_allocation(function: callable, span_steps: Union[np.array, np.ndarray], key: str, target: dict or None):
         
         if target is None:
             target = {}
 
-        target['y'] = np.linspace(0, span, n_steps)
+        target['y'] = span_steps
         target[key] = np.array([function(yi) for yi in target['y']])
 
         return target
-        
+
     @staticmethod
-    def __dictionary_input_allocation(dictionary: dict, key: str, target: dict or None, airfoil=False):
+    def __dictionary_input_allocation(dictionary: dict, span_steps: Union[np.array, np.ndarray], key: str, target: dict or None, airfoil=False):
         
         if target is None:
             target = {}
 
         if airfoil is False:
-            target['y'] = dictionary['y']
-            target[key] = dictionary[key]
+            target['y'] = span_steps
+            target[key] = []
 
-        elif airfoil is True:
+            keys = list(dictionary.keys())
 
-            for key, value in dictionary.items():
-                target[key] = value
+            for yi in span_steps:
+                for i in range(len(keys)-1):
+
+                    if keys[i+1] > yi >= keys[i]:
+                        target[key].append(linear_interpolation(yi, (keys[i], dictionary[keys[i]]), (keys[i+1], dictionary[keys[i+1]])))
+
+            target[key] = np.array(target[key])
+
+        elif airfoil is True:  # TODO: Airfoil transition morphing needs to be implemented
+
+            for key_i, value in dictionary.items():
+                target[key].append(value)
 
         return target
 
     """
     These methods will be used by the user to create their wing
     """
-    def set_span(self, span: Union[int, float]):
+    def set_span_discretization(self, span_points: Union[list, np.array, np.ndarray]):
 
-        self.b = span
-        self.__yrange = np.linspace(0, self.b, self.__span_steps)
+        self.b = span_points[-1]
+        self.__yrange = np.array(span_points)
 
     def set_airfoil(self, airfoil: Union[str, dict]):
         
         airfoiltype = type(airfoil)
 
         if airfoiltype is str:
-            self.airfoil_distribution = self.__number_input_allocation(airfoil, self.b, 'airfoil', self.airfoil_distribution, self.__span_steps, airfoil=True)
+            self.airfoil_distribution = self.__number_input_allocation(airfoil, self.__yrange, 'airfoil', self.airfoil_distribution, airfoil=True)
 
         elif airfoiltype is dict:
             self.airfoil_distribution = self.__dictionary_input_allocation(airfoil, 'airfoil', self.airfoil_distribution, airfoil=True)
@@ -207,13 +232,13 @@ class Wing(object):
         twisttype = type(twist)
 
         if twisttype in [int, float]:
-            self.twist_distribution = self.__number_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__span_steps)
+            self.twist_distribution = self.__number_input_allocation(twist, self.__yrange, 'twist', self.twist_distribution)
 
         elif twisttype in [list, np.array]:
-            self.twist_distribution = self.__array_input_allocation(twist, 'twist', self.twist_distribution)
+            self.twist_distribution = self.__array_input_allocation(twist, self.__yrange, 'twist', self.twist_distribution)
 
         elif callable(twist):
-            self.twist_distribution = self.__callable_input_allocation(twist, self.b, 'twist', self.twist_distribution, self.__span_steps)
+            self.twist_distribution = self.__callable_input_allocation(twist, self.__yrange, 'twist', self.twist_distribution)
 
         elif twisttype is dict:
             self.twist_distribution = self.__dictionary_input_allocation(twist, 'twist', self.twist_distribution)
@@ -228,13 +253,13 @@ class Wing(object):
         dihedraltype = type(dihedral)
         
         if dihedraltype in [int, float]:
-            self.dihedral_distribution = self.__number_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__span_steps)
+            self.dihedral_distribution = self.__number_input_allocation(dihedral, self.__yrange, 'dihedral', self.dihedral_distribution)
 
         elif dihedraltype in [list, np.array]:
-            self.dihedral_distribution = self.__array_input_allocation(dihedral, 'dihedral', self.dihedral_distribution)
+            self.dihedral_distribution = self.__array_input_allocation(dihedral, self.__yrange, 'dihedral', self.dihedral_distribution)
 
         elif callable(dihedral):
-            self.dihedral_distribution = self.__callable_input_allocation(dihedral, self.b, 'dihedral', self.dihedral_distribution, self.__span_steps)
+            self.dihedral_distribution = self.__callable_input_allocation(dihedral, self.__yrange, 'dihedral', self.dihedral_distribution)
 
         elif dihedraltype is dict:
             self.dihedral_distribution = self.__dictionary_input_allocation(dihedral, 'dihedral', self.dihedral_distribution, )
@@ -249,13 +274,13 @@ class Wing(object):
         sweeptype = type(sweep)
     
         if sweeptype in [int, float]:
-            self.sweep_distribution = self.__number_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__span_steps)
+            self.sweep_distribution = self.__number_input_allocation(sweep, self.__yrange, 'sweep', self.sweep_distribution)
 
         elif sweeptype in [list, np.array]:
-            self.sweep_distribution = self.__array_input_allocation(sweep, 'sweep', self.sweep_distribution, )
+            self.sweep_distribution = self.__array_input_allocation(sweep, self.__yrange, 'sweep', self.sweep_distribution)
 
         elif callable(sweep):
-            self.sweep_distribution = self.__callable_input_allocation(sweep, self.b, 'sweep', self.sweep_distribution, self.__span_steps)
+            self.sweep_distribution = self.__callable_input_allocation(sweep, self.__yrange, 'sweep', self.sweep_distribution)
             
         elif sweeptype is dict:
             self.sweep_distribution = self.__dictionary_input_allocation(sweep, 'sweep', self.sweep_distribution)
@@ -273,11 +298,11 @@ class Wing(object):
             self.cr = c
             self.ct = c
             self.taper = 1
-            self.chord_distribution = self.__number_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__span_steps)
+            self.chord_distribution = self.__number_input_allocation(c, self.__yrange, 'chord', self.chord_distribution)
 
         elif ctype in [list, np.array]:
 
-            self.chord_distribution = self.__array_input_allocation(c, 'chord', self.chord_distribution)
+            self.chord_distribution = self.__array_input_allocation(c, self.__yrange, 'chord', self.chord_distribution)
             self.cr = self.chord_distribution['chord'][0]
             self.ct = self.chord_distribution['chord'][-1]
             self.taper = self.ct/self.cr
@@ -286,7 +311,7 @@ class Wing(object):
             self.cr = c(0)
             self.ct = c(self.b)
             self.taper = self.ct/self.cr
-            self.chord_distribution = self.__callable_input_allocation(c, self.b, 'chord', self.chord_distribution, self.__span_steps)
+            self.chord_distribution = self.__callable_input_allocation(c, self.__yrange, 'chord', self.chord_distribution)
 
         elif ctype == dict:
             self.chord_distribution = self.__dictionary_input_allocation(c, 'chord', self.chord_distribution)
@@ -352,7 +377,7 @@ class Wing(object):
 
         self.data_container.set_data(data)
 
-    def __shift_wing_forward(self, percent_chord: float = 0.25):
+    def __shift_wing_horizontally(self, percent_chord: float = 0.25):
 
         data = self.data_container.get_dictionary()
 
@@ -378,18 +403,43 @@ class Wing(object):
         self.data_container.set_data(data)
 
     def __apply_sweep(self):
-        pass
+
+        data = self.data_container.get_dictionary()
+        delta_x = 0
+
+        keys = list(data.keys())
+
+        for (idx, key), alpha in zip(enumerate(keys[:-1]), self.sweep_distribution['sweep']):
+
+            delta_x = delta_x + (keys[idx+1] - key)*np.tan(alpha)
+
+            data[keys[idx+1]]['x'] -= delta_x
+
+        self.data_container.set_data(data)
 
     def __apply_dihedral(self):
-        pass
+
+        data = self.data_container.get_dictionary()
+        delta_z = 0
+
+        keys = list(data.keys())
+
+        for (idx, key), alpha in zip(enumerate(keys[:-1]), self.dihedral_distribution['dihedral']):
+            delta_z = delta_z + (keys[idx + 1] - key) * np.tan(alpha)
+
+            data[keys[idx + 1]]['z'] += delta_z
+
+        self.data_container.set_data(data)
 
     def construct(self):
 
         self.__create_initial_wing()
-        self.__shift_wing_forward(percent_chord=0.25)
+        self.__shift_wing_horizontally(percent_chord=0.25)
 
         while self.transformation_order:
             self.transformation_order.pop()()
+
+        self.__shift_wing_horizontally(percent_chord=-0.25)
 
     @staticmethod
     def axisEqual3D(ax):
@@ -422,12 +472,12 @@ class Wing(object):
 
 if __name__ == '__main__':
 
-    W = Wing(n_steps=40)
-    W.set_span(20)
-    W.set_chord(lambda y: 3-2.7/20*y)
-    W.set_dihedral(0)
-    W.set_twist(0)
-    W.set_sweep(0)
+    W = Wing()
+    W.set_span_discretization(np.linspace(0, 20, 50))
+    W.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(W.b**2)))
+    W.set_sweep(lambda y: 1-y/(W.b/3) if y < W.b/3 else (0 if y < 2*W.b/3 else 0.3))
+    W.set_dihedral(lambda y: y/W.b*0.5)
+    W.set_twist(lambda y: 0.1-0.1*y/W.b)
     W.set_airfoil('e1213')
     W.construct()
     W.plot_wing()

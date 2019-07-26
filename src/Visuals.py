@@ -101,6 +101,27 @@ class EditorWindow(tk.Toplevel):
             sticky='n',
         )
 
+        if self.name == 'Span Distr.':
+
+            self.n_steps = tk.StringVar()
+
+            self.linear_btn = tk.Button(
+                self.btn_frame,
+                text='Linear Scale',
+                command=lambda: self.__linear_input()
+            )
+            self.linear_btn.grid(
+                row=3,
+                column=0,
+                sticky='n',
+            )
+
+    def __linear_input(self):
+
+        self.steps = tk.Toplevel(self)
+
+
+
     def set_standard_input(self, span: float or int, span_steps: int, name: str):
 
         if name != 'Chord' and name != 'Airfoils':
@@ -154,7 +175,7 @@ class WingEditor(tk.Tk):
         else:
             self.n = 100
 
-        self.wing = Wing(n_steps=self.n)
+        self.wing = Wing()
 
         super().__init__(*args, **kwargs)
         self.geometry(ROOT_GEO)
@@ -165,7 +186,7 @@ class WingEditor(tk.Tk):
 
         tk.Tk.wm_title(self, "WingGeo Editor")
 
-        self.wing = Wing(self.n)
+        self.wing = Wing()
 
         self.plot_container = tk.Frame(self)
         self.plot_container.grid(row=0, column=0)
@@ -208,8 +229,8 @@ class WingEditor(tk.Tk):
         """
         self.parameter_label_texts = [
             'Span',
-            'Span Steps',
             'Airfoil Steps',
+            'Span Distr.',
             'Airfoils',
             'Chord',
             'Sweep',
@@ -219,11 +240,11 @@ class WingEditor(tk.Tk):
 
         self.parameter_labels = {}
         self.parameter_entries = {}
-        self.parameter_variables = {label: tk.StringVar() for label in self.parameter_label_texts}
+        self.parameter_variables = {label: tk.StringVar() for label in self.parameter_label_texts[:2]}
         self.editor_windows = {label: {
             'window': EditorWindow(self, label),
             'state': False}
-            for label in self.parameter_label_texts[3:]}
+            for label in self.parameter_label_texts[2:]}
 
         SPACING = (5, 20)
 
@@ -242,7 +263,7 @@ class WingEditor(tk.Tk):
                 pady=SPACING[1]
             )
 
-            if 0 <= idx <= 2:
+            if 0 <= idx <= 1:
                 self.parameter_entries[label] = ttk.Entry(
                                                     self.editor_container,
                                                     textvariable=self.parameter_variables[label]
@@ -259,7 +280,11 @@ class WingEditor(tk.Tk):
 
             else:
                 print(label)
-                if label == 'Airfoils':
+
+                if label == "Span Distr.":
+                    command = self.__open_span_editor
+
+                elif label == 'Airfoils':
                     command = self.__open_airfoil_editor
 
                 elif label == 'Chord':
@@ -281,10 +306,9 @@ class WingEditor(tk.Tk):
                     self.editor_container,
                     text="Edit",
                     command=command,
-                    state=tk.NORMAL
+                    state=tk.DISABLED if label != 'Span Distr.' else tk.NORMAL
                 )
 
-                self.parameter_variables[label].set(0)
                 self.parameter_entries[label].grid(
                     row=idx,
                     column=1,
@@ -359,10 +383,6 @@ class WingEditor(tk.Tk):
             "write",
             lambda name, index, mode: self.__entry_box_change()
         )
-        self.parameter_variables['Span Steps'].trace_add(
-            "write",
-            lambda name, index, mode: self.__entry_box_change()
-        )
         self.parameter_variables['Airfoil Steps'].trace_add(
             "write",
             lambda name, index, mode: self.__entry_box_change()
@@ -424,19 +444,25 @@ class WingEditor(tk.Tk):
         """
 
         if self.parameter_variables['Span'].get() == "" or \
-                self.parameter_variables['Span Steps'].get() == "" or \
                 self.parameter_variables['Airfoil Steps'].get() == "":
-            for label in self.parameter_label_texts[3:]:
+
+            for label in self.parameter_label_texts[2:]:
                 self.parameter_entries[label].config(state=tk.DISABLED)
 
         elif int(self.parameter_variables['Span'].get()) > 0 and \
-                int(self.parameter_variables['Span Steps'].get()) > 0 \
-                and int(self.parameter_variables['Airfoil Steps'].get()) > 0:
+                int(self.parameter_variables['Airfoil Steps'].get()) > 0:
 
+            self.parameter_entries['Span Distr.'].config(state=tk.NORMAL)
             for label in self.parameter_label_texts[3:]:
-                self.parameter_entries[label].config(state=tk.NORMAL)
+                self.parameter_entries[label].config(state=tk.DISABLED)
+
+            if not self.editor_windows['Span Distr.']['window'].text.compare("end-1c", "==", "1.0"):
+
+                for label in self.parameter_label_texts[3:]:
+                    self.parameter_entries[label].config(state=tk.NORMAL)
 
         else:
+
             for label in self.parameter_label_texts[3:]:
                 self.parameter_entries[label].config(state=tk.DISABLED)
 
@@ -446,12 +472,14 @@ class WingEditor(tk.Tk):
     def __open_editor(self, name: str):
 
         if self.editor_windows[name]['window'].text.compare("end-1c", "==", "1.0"):
-            self.editor_windows[name]['window'].set_standard_input(
-                int(self.parameter_variables['Span'].get()),
-                int(self.parameter_variables['Span Steps'].get()),
-                name=name
-            )
+            # TODO: Get input from span distribution
+            if name == 'Span Distr.':
+                self.editor_windows[name]['window'].text.insert("1.0", "\n".join([str(round(i, 4)) for i in np.linspace(0, float(self.parameter_variables['Span'].get()), 11)]))
+
         self.editor_windows[name]['window'].deiconify()
+
+    def __open_span_editor(self):
+        self.__open_editor('Span Distr.')
 
     def __open_airfoil_editor(self):
         self.__open_editor('Airfoils')
@@ -496,7 +524,6 @@ class WingEditor(tk.Tk):
         self.wing.set_spanwise_steps(values['Span Steps'])
         self.wing.set_airfoil_steps(values['Airfoil Steps'])
 
-        self.wing.set_span(values['Span'])
         self.wing.set_airfoil(values['Airfoils'])
         self.wing.set_chord(values['Chord'])
         self.wing.set_sweep(values['Sweep'])
