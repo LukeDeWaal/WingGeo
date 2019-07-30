@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from WingTool import Wing
+from TkTable import Tk_Table
 
 
 LARGE_FONT = ("Verdana", 12)
@@ -43,7 +44,7 @@ class EditorWindow(tk.Toplevel):
         super().__init__(root)
         self.name = name
         self.title(self.name)
-        self.geometry(EDITOR_GEO)  # TODO: Make modular with main window
+        # self.geometry(EDITOR_GEO)  # TODO: Make modular with main window
 
         self.menubar = tk.Menu(self.master)
         self.config(menu=self.menubar)
@@ -57,20 +58,21 @@ class EditorWindow(tk.Toplevel):
         fileMenu.add_command(label="Exit", command=lambda: self.wm_withdraw())
         self.menubar.add_cascade(label="File", menu=fileMenu)
 
-        self.input_text = ""
-        self.text = tk.Text(self, height=30, width=30)
-        self.text.grid(row=0, column=0)
-
         self.btn_frame = tk.Frame(self)
-        self.btn_frame.grid(row=0, column=1)
+        self.btn_frame.grid(
+            row=0, column=0, sticky='nw'
+        )
 
         self.btn_frame.grid_rowconfigure(0, weight=1)
-        self.btn_frame.grid_rowconfigure(1, weight=1)
         self.btn_frame.grid_columnconfigure(0, weight=1)
+        self.btn_frame.grid_columnconfigure(1, weight=1)
+        self.btn_frame.grid_columnconfigure(2, weight=1)
+        self.btn_frame.grid_columnconfigure(3, weight=1)
+        self.btn_frame.grid_columnconfigure(4, weight=1)
 
-        self.apply_btn = tk.Button(
+        self.apply_btn = ttk.Button(
             self.btn_frame,
-            text='Apply',
+            text='New Section',
             command=lambda: None
         )
         self.apply_btn.grid(
@@ -79,80 +81,79 @@ class EditorWindow(tk.Toplevel):
             sticky='n',
         )
 
-        self.reset_btn = tk.Button(
+        self.reset_btn = ttk.Button(
             self.btn_frame,
             text='Reset',
-            command=lambda: self.text.delete('1.0', tk.END)
+            command=lambda: None
         )
         self.reset_btn.grid(
-            row=1,
-            column=0,
+            row=0,
+            column=1,
             sticky='n',
         )
 
-        self.clear_btn = tk.Button(
+        self.clear_btn = ttk.Button(
             self.btn_frame,
-            text='Clear',
+            text='Delete',
             command=lambda: None
         )
         self.clear_btn.grid(
-            row=2,
-            column=0,
+            row=0,
+            column=2,
             sticky='n',
         )
 
-        if self.name == 'Span Distr.':
+        self.entry_frame = tk.Frame(self)
+        self.entry_frame.grid(
+            row=1, column=0, sticky='nw'
+        )
 
-            self.n_steps = tk.StringVar()
+        self.table = Tk_Table(
+            self.entry_frame,
+            ['Start', 'Stop', 'Steps'],
+            height=30
+        )
 
-            self.linear_btn = tk.Button(
-                self.btn_frame,
-                text='Linear Scale',
-                command=lambda: self.__linear_input()
-            )
-            self.linear_btn.grid(
-                row=3,
-                column=0,
-                sticky='n',
-            )
+        self.table.insert_row([0, self.get_span(), 10])
 
-    def __linear_input(self):
+        self.table.grid(
+            row=0,
+            column=0,
+            sticky='nw'
+        )
 
-        self.steps = tk.Toplevel(self)
+        self.plotting_frame = tk.Frame(self)
+        self.plotting_frame.grid(row=1, column=1, sticky='nw')
+
+        fig = Figure(figsize=(5, 5), dpi=100)
+
+        canvas = FigureCanvasTkAgg(fig, self.plotting_frame)
+        canvas.draw()
+
+        self.plot = fig.subplots(1, 1)
 
 
+        toolbar = NavigationToolbar2Tk(canvas, self.plotting_frame)
+        toolbar.update()
 
-    def set_standard_input(self, span: float or int, span_steps: int, name: str):
+        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-        if name != 'Chord' and name != 'Airfoils':
-            for yi in np.linspace(0, span, span_steps):
-                self.text.insert(
-                    tk.END,
-                    f"{round(yi, 4)}: 0.0\n"
-                )
+        self.plot.set_xlim(0, float(self.get_span()))
 
-        elif name == 'Chord':
-            for yi in np.linspace(0, span, span_steps):
-                self.text.insert(
-                    tk.END,
-                    f"{round(yi, 4)}: 1.0\n"
-                )
+    def get_span(self):
+        return self.master.parameter_variables['Span'].get()
 
-        elif name == 'Airfoils':
-            for yi in np.linspace(0, span, span_steps):
-                self.text.insert(
-                    tk.END,
-                    f"{round(yi, 4)}: 'e1213'\n"
-                )
+    def update_plot(self):
+        pass
 
-        else:
-            raise ValueError("Unexpected Input")
+
 
     def __retrieve_input(self):
-        self.input_text = self.text.get("1.0", tk.END)
+        pass
 
     def __apply(self):
-        self.__retrieve_input()
+        pass
 
     def __open(self):
         pass
@@ -168,17 +169,10 @@ class WingEditor(tk.Tk):
 
     def __init__(self, *args, **kwargs):
 
-        if 'n' in kwargs.keys():
-            self.n = kwargs['n']
-            del kwargs['n']
-
-        else:
-            self.n = 100
-
         self.wing = Wing()
 
         super().__init__(*args, **kwargs)
-        self.geometry(ROOT_GEO)
+        # self.geometry(ROOT_GEO)
 
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -241,10 +235,6 @@ class WingEditor(tk.Tk):
         self.parameter_labels = {}
         self.parameter_entries = {}
         self.parameter_variables = {label: tk.StringVar() for label in self.parameter_label_texts[:2]}
-        self.editor_windows = {label: {
-            'window': EditorWindow(self, label),
-            'state': False}
-            for label in self.parameter_label_texts[2:]}
 
         SPACING = (5, 20)
 
@@ -388,54 +378,11 @@ class WingEditor(tk.Tk):
             lambda name, index, mode: self.__entry_box_change()
         )
 
-        for window in self.editor_windows.values():
-            window['window'].protocol('WM_DELETE_WINDOW', window['window'].withdraw)
-            window['window'].withdraw()
+        self.editor_windows = {}
+
 
     def __parser(self):
-
-        values = {}
-
-        for name, window in self.editor_windows.items():
-            print(name)
-            values[name] = {
-                'y': [],
-                name.lower(): []
-            }
-
-            for line in window['window'].text.get('1.0', tk.END).split('\n'):
-
-                try:
-                    yvals, vals = line.split(':')
-
-                except ValueError:
-                    continue
-
-                v = eval(vals)
-
-                if '-' in yvals:
-                    start, end = yvals.split('-')
-                    start, end = float(start), float(end)
-                    diff = end - start
-                    y = np.linspace(start, end, int(diff/self.parameter_variables['Span']*self.parameter_variables['Span Steps']))
-
-                    if callable(v):
-                        vals = v(y)
-
-                    else:
-                        vals = list(v)
-
-                    for yi, vi in zip(y, vals):
-                        values[name]['y'].append(yi)
-                        values[name][name.lower()].append(vi)
-
-                else:
-                    y = float(yvals)
-
-                    values[name]['y'].append(y)
-                    values[name][name.lower()].append(v(y) if callable(v) else v)
-
-        return values
+        pass
 
     def __entry_box_change(self):
         """
@@ -456,11 +403,6 @@ class WingEditor(tk.Tk):
             for label in self.parameter_label_texts[3:]:
                 self.parameter_entries[label].config(state=tk.DISABLED)
 
-            if not self.editor_windows['Span Distr.']['window'].text.compare("end-1c", "==", "1.0"):
-
-                for label in self.parameter_label_texts[3:]:
-                    self.parameter_entries[label].config(state=tk.NORMAL)
-
         else:
 
             for label in self.parameter_label_texts[3:]:
@@ -471,12 +413,17 @@ class WingEditor(tk.Tk):
     """
     def __open_editor(self, name: str):
 
-        if self.editor_windows[name]['window'].text.compare("end-1c", "==", "1.0"):
-            # TODO: Get input from span distribution
-            if name == 'Span Distr.':
-                self.editor_windows[name]['window'].text.insert("1.0", "\n".join([str(round(i, 4)) for i in np.linspace(0, float(self.parameter_variables['Span'].get()), 11)]))
+        if name in self.editor_windows.keys():
+            self.editor_windows[name]['window'].deiconify()
 
-        self.editor_windows[name]['window'].deiconify()
+        else:
+            self.editor_windows[name] = {
+                'window': EditorWindow(self, name),
+                'state': False
+            }
+            self.editor_windows[name]['window'].protocol('WM_DELETE_WINDOW',
+                                                          self.editor_windows[name]['window'].withdraw)
+
 
     def __open_span_editor(self):
         self.__open_editor('Span Distr.')
