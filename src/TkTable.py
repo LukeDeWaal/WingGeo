@@ -742,6 +742,7 @@ class Tk_Table(Frame, object):
                                                         heading_background=heading_background,
                                                         heading_foreground=heading_foreground, cell_pady=cell_pady,
                                                         headers=column_header)
+
         self._multicolumn_listbox.interior.grid(row=0, column=1, sticky=N + E + W + S)
 
         self._mousewheel_detection = True
@@ -974,7 +975,7 @@ class Tk_Table(Frame, object):
                 self._entry_popup.place(x=x, y=y, width=width, height=height)
 
     def configure_column(self, index, width=None, minwidth=None, anchor=None, stretch=None):
-        self._multicolumn_listbox.configure_column(self, index, width=None, minwidth=None, anchor=None, stretch=None)
+        self._multicolumn_listbox.configure_column(self, index, width=width, minwidth=minwidth, anchor=anchor, stretch=stretch)
 
     def row_data(self, index):
         return self._multicolumn_listbox.row_data(index)

@@ -1,19 +1,22 @@
 import matplotlib
 matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
+from matplotlib.backend_bases import MouseEvent
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 from matplotlib import style
 style.use('ggplot')
 
 import numpy as np
-import os
+import os, math
 import tkinter as tk
 from tkinter import ttk
 
 from WingTool import Wing
 from TkTable import Tk_Table
+from DraggablePlot import DraggablePlot
 
 
 LARGE_FONT = ("Verdana", 12)
@@ -44,7 +47,6 @@ class EditorWindow(tk.Toplevel):
         super().__init__(root)
         self.name = name
         self.title(self.name)
-        # self.geometry(EDITOR_GEO)  # TODO: Make modular with main window
 
         self.menubar = tk.Menu(self.master)
         self.config(menu=self.menubar)
@@ -72,8 +74,8 @@ class EditorWindow(tk.Toplevel):
 
         self.apply_btn = ttk.Button(
             self.btn_frame,
-            text='New Section',
-            command=lambda: None
+            text='Update',
+            command=lambda: self.table_to_plot()
         )
         self.apply_btn.grid(
             row=0,
@@ -125,13 +127,21 @@ class EditorWindow(tk.Toplevel):
         self.plotting_frame = tk.Frame(self)
         self.plotting_frame.grid(row=1, column=1, sticky='nw')
 
-        fig = Figure(figsize=(5, 5), dpi=100)
+        self._figure, self.plot, self._line = None, None, None
+        self._dragging_point = None
+        self._points = {}
 
-        canvas = FigureCanvasTkAgg(fig, self.plotting_frame)
+        self.xlim = (0, float(self.get_span()))
+        self.ylim = (0, 100)
+
+        self._figure = Figure(figsize=(5, 5), dpi=100)
+
+        canvas = FigureCanvasTkAgg(self._figure, self.plotting_frame)
         canvas.draw()
 
-        self.plot = fig.subplots(1, 1)
-
+        self.plot = self._figure.subplots(1, 1)
+        self.plot.grid()
+        self.plot.set_facecolor((0.85, 0.85, 0.85))
 
         toolbar = NavigationToolbar2Tk(canvas, self.plotting_frame)
         toolbar.update()
@@ -139,18 +149,12 @@ class EditorWindow(tk.Toplevel):
         canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-        self.plot.set_xlim(0, float(self.get_span()))
+        self._init_plot()
+
+        self.last_edited = 'plot'
 
     def get_span(self):
         return self.master.parameter_variables['Span'].get()
-
-    def update_plot(self):
-        pass
-
-
-
-    def __retrieve_input(self):
-        pass
 
     def __apply(self):
         pass
@@ -163,6 +167,165 @@ class EditorWindow(tk.Toplevel):
 
     def __new(self):
         pass
+
+    def table_to_plot(self):
+
+        i = 0
+        while True:
+            try:
+                self._add_point(self.table[(i, 0)], self.table[(i, 2)])
+                i += 1
+            except (Exception, IndexError):
+                break
+        i -= 1
+        self._add_point(float(self.get_span()), self.table[(i, 2)])
+
+    def plot_to_table(self):
+
+        for i in range(self.table.number_of_rows):
+            self.table.select_row(i)
+
+        self.table.delete_all_selected_rows()
+
+        xs = list(self._points.keys())
+        ys = list(self._points.values())
+
+        xy = zip(xs, ys)
+
+        sxy = sorted(xy)
+        xsort = []
+        ysort = []
+
+        for x, y in sxy:
+            xsort.append(x)
+            ysort.append(y)
+
+        for idx in range(len(xsort)-1):
+            self.table.insert_row([round(xsort[idx], 3), round(xsort[idx+1], 3), int(ysort[idx])])
+
+        self.table.sort_by(0, False)
+
+    def _init_plot(self):
+
+        self.plot.set_xlim(*self.xlim)
+        self.plot.set_ylim(*self.ylim)
+        self.plot.grid(which="both")
+
+        self._figure.canvas.mpl_connect('button_press_event', self._on_click)
+        self._figure.canvas.mpl_connect('button_release_event', self._on_release)
+        self._figure.canvas.mpl_connect('motion_notify_event', self._on_motion)
+
+        self._add_point(0, 10)
+        self._add_point(float(self.get_span()), 10)
+        self.update_plot()
+
+    def _update_plot_limits(self):
+        self.xlim = (0, float(self.get_span()))
+        self.plot.set_xlim(*self.xlim)
+
+    def update_plot(self):
+
+        self._update_plot_limits()
+
+        if not self._points:
+            self._line.set_data([], [])
+        else:
+            x, y = zip(*sorted(self._points.items()))
+            x = list(x)
+            y = list(y)
+
+            x[0] = 0
+            x[-1] = float(self.get_span())
+
+            y[-1] = y[-2]
+            self._points = {xi: yi for xi, yi in zip(x, y)}
+
+            x, y = zip(*sorted(self._points.items()))
+            x = list(x)
+            y = list(y)
+
+            # Add new plot
+            if not self._line:
+                self._line, = self.plot.plot(x, y, "b", marker="o", markersize=10)
+            # Update current plot
+            else:
+                self._line.set_data(x, y)
+        self._figure.canvas.draw()
+        self.plot_to_table()
+
+    def _add_point(self, x, y=None):
+        if isinstance(x, MouseEvent):
+            x, y = float(x.xdata), float(x.ydata)
+        self._points[x] = y
+        return x, y
+
+    def _remove_point(self, x, y):
+        if x in self._points.keys() and y in self._points.values():
+            self._points.pop(x)
+
+    def _find_neighbor_point(self, event):
+        u""" Find point around mouse position
+        :rtype: ((int, int)|None)
+        :return: (x, y) if there are any point around mouse else None
+        """
+        distance_threshold = 3.0
+        nearest_point = None
+        min_distance = float('inf')
+        for x, y in self._points.items():
+            distance = math.hypot(event.xdata - x, event.ydata - y)
+            if distance < min_distance:
+                min_distance = distance
+                nearest_point = (x, y)
+        if min_distance < distance_threshold:
+            return nearest_point
+        return None
+
+    def _on_click(self, event):
+        u""" callback method for mouse click event
+        :type event: MouseEvent
+        """
+        # left click
+        if event.button == 1 and event.inaxes in [self.plot]:
+            point = self._find_neighbor_point(event)
+            if point:
+                self._dragging_point = point
+            else:
+                self._add_point(event)
+            self.update_plot()
+        # right click
+        elif event.button == 3 and event.inaxes in [self.plot]:
+            point = self._find_neighbor_point(event)
+            if point:
+                self._remove_point(*point)
+                self.update_plot()
+
+    def _on_release(self, event):
+        u""" callback method for mouse release event
+        :type event: MouseEvent
+        """
+        if event.button == 1 and event.inaxes in [self.plot] and self._dragging_point:
+            self._dragging_point = None
+            self.update_plot()
+
+    def _on_motion(self, event):
+        u""" callback method for mouse motion event
+        :type event: MouseEvent
+        """
+        if not self._dragging_point:
+            return
+        if event.xdata is None or event.ydata is None:
+            return
+
+        self._remove_point(*self._dragging_point)
+
+        if event.xdata > 0:
+            pass
+
+        else:
+            event.xdata = 0
+
+        self._dragging_point = self._add_point(event)
+        self.update_plot()
 
 
 class WingEditor(tk.Tk):
@@ -269,7 +432,6 @@ class WingEditor(tk.Tk):
                 )
 
             else:
-                print(label)
 
                 if label == "Span Distr.":
                     command = self.__open_span_editor
@@ -414,6 +576,7 @@ class WingEditor(tk.Tk):
     def __open_editor(self, name: str):
 
         if name in self.editor_windows.keys():
+            self.editor_windows[name]['window'].update_plot()
             self.editor_windows[name]['window'].deiconify()
 
         else:

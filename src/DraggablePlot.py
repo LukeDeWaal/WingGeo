@@ -4,21 +4,24 @@ import matplotlib.pyplot as plt
 from matplotlib.backend_bases import MouseEvent
 
 
-class DraggablePlotExample(object):
+class DraggablePlot(object):
     u""" An example of plot with draggable markers """
 
-    def __init__(self):
-        self._figure, self._axes, self._line = None, None, None
+    def __init__(self, figure = None, xlim: tuple = None, ylim: tuple = None):
+        self._figure, self._axes, self._line = figure, None, None
         self._dragging_point = None
         self._points = {}
+
+        self.xlim = xlim if xlim is not None else (0, 10)
+        self.ylim = ylim if ylim is not None else (0, 200)
 
         self._init_plot()
 
     def _init_plot(self):
         self._figure = plt.figure("Example plot")
         axes = plt.subplot(1, 1, 1)
-        axes.set_xlim(0, 100)
-        axes.set_ylim(0, 100)
+        axes.set_xlim(*self.xlim)
+        axes.set_ylim(*self.ylim)
         axes.grid(which="both")
         self._axes = axes
 
@@ -42,7 +45,7 @@ class DraggablePlotExample(object):
 
     def _add_point(self, x, y=None):
         if isinstance(x, MouseEvent):
-            x, y = int(x.xdata), int(x.ydata)
+            x, y = float(x.xdata), float(x.ydata)
         self._points[x] = y
         return x, y
 
@@ -108,4 +111,4 @@ class DraggablePlotExample(object):
 
 
 if __name__ == "__main__":
-    plot = DraggablePlotExample()
+    plot = DraggablePlot()
