@@ -16,7 +16,6 @@ from tkinter import ttk
 
 from WingTool import Wing
 from TkTable import Tk_Table
-from DraggablePlot import DraggablePlot
 
 
 LARGE_FONT = ("Verdana", 12)
@@ -83,6 +82,24 @@ class EditorWindow(tk.Toplevel):
             sticky='n',
         )
 
+        def add_row():
+
+            self.table.insert_row([self.table[(self.table.number_of_rows - 1, 1)], float(self.get_span()), 10],
+                                  self.table.number_of_rows)
+
+            self.table_to_plot()
+
+        self.add_btn = ttk.Button(
+            self.btn_frame,
+            text='Add Row',
+            command=lambda: add_row()
+        )
+        self.add_btn.grid(
+            row=0,
+            column=1,
+            sticky='n',
+        )
+
         self.reset_btn = ttk.Button(
             self.btn_frame,
             text='Reset',
@@ -90,18 +107,18 @@ class EditorWindow(tk.Toplevel):
         )
         self.reset_btn.grid(
             row=0,
-            column=1,
+            column=2,
             sticky='n',
         )
 
         self.clear_btn = ttk.Button(
             self.btn_frame,
             text='Delete',
-            command=lambda: None
+            command=lambda: self.table.delete_all_selected_rows() and self.update_plot()
         )
         self.clear_btn.grid(
             row=0,
-            column=2,
+            column=3,
             sticky='n',
         )
 
@@ -127,7 +144,7 @@ class EditorWindow(tk.Toplevel):
         self.plotting_frame = tk.Frame(self)
         self.plotting_frame.grid(row=1, column=1, sticky='nw')
 
-        self._figure, self.plot, self._line = None, None, None
+        self._figure, self.plot, self._line, self._connectors = None, None, None, None
         self._dragging_point = None
         self._points = {}
 
@@ -141,7 +158,7 @@ class EditorWindow(tk.Toplevel):
 
         self.plot = self._figure.subplots(1, 1)
         self.plot.grid()
-        self.plot.set_facecolor((0.85, 0.85, 0.85))
+        self.plot.set_facecolor((0.9, 0.9, 0.9))
 
         toolbar = NavigationToolbar2Tk(canvas, self.plotting_frame)
         toolbar.update()
@@ -152,6 +169,15 @@ class EditorWindow(tk.Toplevel):
         self._init_plot()
 
         self.last_edited = 'plot'
+        self.bind('<Return>', self.__update_table_and_plot)
+
+    def __update_table_and_plot(self, event):
+
+        if len(self.table.selected_rows) > 0:
+            self.table.deselect_all()
+            self.table_to_plot()
+        else:
+            pass
 
     def get_span(self):
         return self.master.parameter_variables['Span'].get()
@@ -170,15 +196,14 @@ class EditorWindow(tk.Toplevel):
 
     def table_to_plot(self):
 
-        i = 0
-        while True:
-            try:
-                self._add_point(self.table[(i, 0)], self.table[(i, 2)])
-                i += 1
-            except (Exception, IndexError):
-                break
-        i -= 1
-        self._add_point(float(self.get_span()), self.table[(i, 2)])
+        self._points = {}
+
+        for i in range(self.table.number_of_rows):
+            point = (float(self.table[(i, 0)]), int(self.table[(i, 2)]))
+            self._add_point(*point)
+
+        self._add_point(float(self.table[(i, 1)]), int(self.table[(i, 2)]))
+        self.update_plot()
 
     def plot_to_table(self):
 
@@ -236,8 +261,8 @@ class EditorWindow(tk.Toplevel):
 
             x[0] = 0
             x[-1] = float(self.get_span())
-
             y[-1] = y[-2]
+
             self._points = {xi: yi for xi, yi in zip(x, y)}
 
             x, y = zip(*sorted(self._points.items()))
@@ -246,10 +271,15 @@ class EditorWindow(tk.Toplevel):
 
             # Add new plot
             if not self._line:
-                self._line, = self.plot.plot(x, y, "b", marker="o", markersize=10)
+                self._line, = self.plot.plot(x, y, "rx-", markersize=10)
+
             # Update current plot
             else:
                 self._line.set_data(x, y)
+
+            # for idx in range(len(x)-1):
+            #     self._line.set_data(np.linspace(x[idx], x[idx+1], 10), np.ones((10,))*y[idx])
+
         self._figure.canvas.draw()
         self.plot_to_table()
 

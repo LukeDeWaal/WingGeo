@@ -473,7 +473,7 @@ class Wing(object):
 if __name__ == '__main__':
 
     W = Wing()
-    W.set_span_discretization(np.linspace(0, 20, 50))
+    W.set_span_discretization(np.linspace(0, 20, 30))
     W.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(W.b**2)))
     W.set_sweep(lambda y: 1-y/(W.b/3) if y < W.b/3 else (0 if y < 2*W.b/3 else 0.3))
     W.set_dihedral(lambda y: y/W.b*0.5)
