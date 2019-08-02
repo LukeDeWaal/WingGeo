@@ -1,25 +1,21 @@
 import matplotlib
 matplotlib.use("TkAgg")
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.backend_bases import MouseEvent
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.animation as animation
 from matplotlib import style
 style.use('ggplot')
 
 import numpy as np
-import os, math
+import math
 import tkinter as tk
 from tkinter import ttk
 
-from WingTool import Wing
-from TkTable import Tk_Table
+from backend.WingTool import Wing
+from frontend.TkTable import Tk_Table
 
 
 LARGE_FONT = ("Verdana", 12)
-
 ROOT_GEO = f"{700}x{600}+{200}+{200}"
 EDITOR_GEO = f"{300}x{500}+{900}+{200}"
 
@@ -55,7 +51,7 @@ class EditorWindow(tk.Toplevel):
         fileMenu.config(tearoff=False)
         fileMenu.add_command(label="New", command=lambda: None)
         fileMenu.add_command(label="Open", command=lambda: None)
-        fileMenu.add_command(label="Save", command=lambda: None)
+        fileMenu.add_command(label="Save", command=lambda: self.__save())
         fileMenu.add_command(label="Exit", command=lambda: self.wm_withdraw())
         self.menubar.add_cascade(label="File", menu=fileMenu)
 
@@ -83,10 +79,15 @@ class EditorWindow(tk.Toplevel):
         )
 
         def add_row():
+            idx = self.table.indices_of_selected_rows[-1]
+            self.table.insert_row(
+                [self.table[(idx, 1)], self.table[(idx, 1)], 10],
+                idx+1
+            )
+            self.table_to_plot()
 
-            self.table.insert_row([self.table[(self.table.number_of_rows - 1, 1)], float(self.get_span()), 10],
-                                  self.table.number_of_rows)
-
+        def del_row():
+            self.table.delete_all_selected_rows()
             self.table_to_plot()
 
         self.add_btn = ttk.Button(
@@ -103,7 +104,7 @@ class EditorWindow(tk.Toplevel):
         self.reset_btn = ttk.Button(
             self.btn_frame,
             text='Reset',
-            command=lambda: None
+            command=lambda: self.__reset()
         )
         self.reset_btn.grid(
             row=0,
@@ -114,7 +115,7 @@ class EditorWindow(tk.Toplevel):
         self.clear_btn = ttk.Button(
             self.btn_frame,
             text='Delete',
-            command=lambda: self.table.delete_all_selected_rows() and self.update_plot()
+            command=lambda: del_row()
         )
         self.clear_btn.grid(
             row=0,
@@ -127,13 +128,39 @@ class EditorWindow(tk.Toplevel):
             row=1, column=0, sticky='nw'
         )
 
+        if self.name == 'Span Distr.':
+            cols = ['Start', 'Stop', 'Steps']
+
+        else:
+            cols = ['Start', 'Stop', self.name]
+
         self.table = Tk_Table(
             self.entry_frame,
-            ['Start', 'Stop', 'Steps'],
+            cols,
             height=30
         )
 
-        self.table.insert_row([0, self.get_span(), 10])
+        self.standard_inputs = {
+            'Span Distr.': 10,
+            'Chord': 1,
+            'Twist': 0,
+            'Sweep': 0,
+            'Dihedral': 0,
+            'Airfoils': 'NACA0012'
+        }
+
+        self.plot_limits = {
+            'Span Distr.': (0, 100),
+            'Chord': (0, 10),
+            'Twist': (-np.pi/2, np.pi/2),
+            'Sweep': (-np.pi/2, np.pi/2),
+            'Dihedral': (-np.pi/2, np.pi/2),
+            'Airfoils': 'NACA0012'
+        }
+
+        self.output_type = int if self.name == 'Span Distr.' else str if self.name == 'Airfoils' else lambda x: round(float(x), 3)
+
+        self.table.insert_row([0, float(self.get_span()), self.standard_inputs[self.name]], 0)
 
         self.table.grid(
             row=0,
@@ -144,12 +171,12 @@ class EditorWindow(tk.Toplevel):
         self.plotting_frame = tk.Frame(self)
         self.plotting_frame.grid(row=1, column=1, sticky='nw')
 
-        self._figure, self.plot, self._line, self._connectors = None, None, None, None
+        self._figure, self.plot, self._line, self._ranges = None, None, None, {}
         self._dragging_point = None
         self._points = {}
 
         self.xlim = (0, float(self.get_span()))
-        self.ylim = (0, 100)
+        self.ylim = self.plot_limits[self.name]
 
         self._figure = Figure(figsize=(5, 5), dpi=100)
 
@@ -171,6 +198,17 @@ class EditorWindow(tk.Toplevel):
         self.last_edited = 'plot'
         self.bind('<Return>', self.__update_table_and_plot)
 
+    def __create_distribution(self):
+
+        points = list(self._points.items())
+        r = []
+        for idx in range(len(points)-1):
+            d = points[idx+1][0] - points[idx][0]
+            r += list(np.arange(points[idx][0], points[idx][1], d/points[idx][1]))
+
+        self.master.discretization = np.array(r)
+        self.master.entry_box_change()
+
     def __update_table_and_plot(self, event):
 
         if len(self.table.selected_rows) > 0:
@@ -182,14 +220,20 @@ class EditorWindow(tk.Toplevel):
     def get_span(self):
         return self.master.parameter_variables['Span'].get()
 
-    def __apply(self):
-        pass
+    def __reset(self):
+
+        self.table.deselect_all()
+        [self.table.select_row(i) for i in range(self.table.number_of_rows)]
+        self.table.delete_all_selected_rows()
+
+        self.table.insert_row([0.0, float(self.get_span()), self.standard_inputs[self.name]], 0)
+        self.table_to_plot()
 
     def __open(self):
         pass
 
     def __save(self):
-        pass
+        self.__create_distribution()
 
     def __new(self):
         pass
@@ -199,10 +243,10 @@ class EditorWindow(tk.Toplevel):
         self._points = {}
 
         for i in range(self.table.number_of_rows):
-            point = (float(self.table[(i, 0)]), int(self.table[(i, 2)]))
+            point = (float(self.table[(i, 0)]), self.output_type(self.table[(i, 2)]))
             self._add_point(*point)
 
-        self._add_point(float(self.table[(i, 1)]), int(self.table[(i, 2)]))
+        self._add_point(float(self.table[(i, 1)]), self.output_type(self.table[(i, 2)]))
         self.update_plot()
 
     def plot_to_table(self):
@@ -226,7 +270,7 @@ class EditorWindow(tk.Toplevel):
             ysort.append(y)
 
         for idx in range(len(xsort)-1):
-            self.table.insert_row([round(xsort[idx], 3), round(xsort[idx+1], 3), int(ysort[idx])])
+            self.table.insert_row([round(xsort[idx], 3), round(xsort[idx+1], 3), self.output_type(ysort[idx])])
 
         self.table.sort_by(0, False)
 
@@ -240,8 +284,8 @@ class EditorWindow(tk.Toplevel):
         self._figure.canvas.mpl_connect('button_release_event', self._on_release)
         self._figure.canvas.mpl_connect('motion_notify_event', self._on_motion)
 
-        self._add_point(0, 10)
-        self._add_point(float(self.get_span()), 10)
+        self._add_point(0, self.standard_inputs[self.name])
+        self._add_point(float(self.get_span()), self.standard_inputs[self.name])
         self.update_plot()
 
     def _update_plot_limits(self):
@@ -287,6 +331,7 @@ class EditorWindow(tk.Toplevel):
         if isinstance(x, MouseEvent):
             x, y = float(x.xdata), float(x.ydata)
         self._points[x] = y
+
         return x, y
 
     def _remove_point(self, x, y):
@@ -374,6 +419,7 @@ class WingEditor(tk.Tk):
         tk.Tk.wm_title(self, "WingGeo Editor")
 
         self.wing = Wing()
+        self.discretization = None
 
         self.plot_container = tk.Frame(self)
         self.plot_container.grid(row=0, column=0)
@@ -563,11 +609,11 @@ class WingEditor(tk.Tk):
 
         self.parameter_variables['Span'].trace_add(
             "write",
-            lambda name, index, mode: self.__entry_box_change()
+            lambda name, index, mode: self.entry_box_change()
         )
         self.parameter_variables['Airfoil Steps'].trace_add(
             "write",
-            lambda name, index, mode: self.__entry_box_change()
+            lambda name, index, mode: self.entry_box_change()
         )
 
         self.editor_windows = {}
@@ -576,7 +622,7 @@ class WingEditor(tk.Tk):
     def __parser(self):
         pass
 
-    def __entry_box_change(self):
+    def entry_box_change(self):
         """
         Keeps track of the the span and discretization values
         and blocks further editing if necessary
@@ -592,8 +638,11 @@ class WingEditor(tk.Tk):
                 int(self.parameter_variables['Airfoil Steps'].get()) > 0:
 
             self.parameter_entries['Span Distr.'].config(state=tk.NORMAL)
+
+            state = tk.DISABLED if self.discretization is None else tk.NORMAL if isinstance(self.discretization, np.ndarray) else tk.DISABLED
+
             for label in self.parameter_label_texts[3:]:
-                self.parameter_entries[label].config(state=tk.DISABLED)
+                self.parameter_entries[label].config(state=state)
 
         else:
 

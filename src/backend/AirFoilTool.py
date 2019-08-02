@@ -1,5 +1,5 @@
 import numpy as np
-from NumericalTools import derive
+from backend.NumericalTools import derive
 import matplotlib.pyplot as plt
 import json, os, sys
 import pandas as pd
@@ -7,10 +7,10 @@ from scipy import interpolate
 from typing import Union
 
 if sys.platform == 'win32':
-    datafiles_path = '\\'.join(os.getcwd().split('\\')[:-1]) + '\\data\\AirfoilCoordinates\\processed'
+    datafiles_path = '\\'.join(os.getcwd().split('\\')[:-2]) + '\\data\\AirfoilCoordinates\\processed'
 
 else:
-    datafiles_path = '/'.join(os.getcwd().split('/')[:-1]) + 'data/AirfoilCoordinates/processed'
+    datafiles_path = '/'.join(os.getcwd().split('/')[:-2]) + 'data/AirfoilCoordinates/processed'
 
 AIRFOILS = [file.split('.')[0] for file in os.listdir(datafiles_path)]
 
@@ -346,10 +346,10 @@ class LoadedAirfoil(AirFoil):
     def __load_airfoil(self):
 
         if sys.platform == 'win32':
-            datafiles_path = '\\'.join(os.getcwd().split('\\')[:-1]) + '\\data\\AirfoilCoordinates\\processed'
+            datafiles_path = '\\'.join(os.getcwd().split('\\')[:-2]) + '\\data\\AirfoilCoordinates\\processed'
 
         else:
-            datafiles_path = '/'.join(os.getcwd().split('/')[:-1]) + 'data/AirfoilCoordinates/processed'
+            datafiles_path = '/'.join(os.getcwd().split('/')[:-2]) + 'data/AirfoilCoordinates/processed'
 
         airfoils = AIRFOILS
 
