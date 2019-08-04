@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from typing import Union
-from NumericalTools import linear_interpolation
-from AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
-from colorama import Fore, Style
+from backend.NumericalTools import linear_interpolation
+from backend.AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
+
 
 # TODO: Make discretization more modular
 
@@ -473,7 +472,7 @@ class Wing(object):
 if __name__ == '__main__':
 
     W = Wing()
-    W.set_span_discretization(np.linspace(0, 20, 30))
+    W.set_span_discretization(list(np.linspace(0, 20, 30))+list(np.linspace(20.1, 30, 30)))
     W.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(W.b**2)))
     W.set_sweep(lambda y: 1-y/(W.b/3) if y < W.b/3 else (0 if y < 2*W.b/3 else 0.3))
     W.set_dihedral(lambda y: y/W.b*0.5)

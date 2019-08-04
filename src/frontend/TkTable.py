@@ -1108,69 +1108,6 @@ if __name__ == '__main__':
     def show_info(msg):
         messagebox.showinfo("Table Data", msg)
 
-
-    # mcListbox = Multicolumn_Listbox(root, ["column one", "column two", "column three"], command=on_select,
-    #                                 cell_anchor="center")
-    # mcListbox.interior.pack()
-    #
-    # mcListbox.insert_row([1, 2, 3])
-    # show_info("mcListbox.insert_row([1,2,3])")
-    #
-    # mcListbox.row.insert([4, 5, 7])
-    # show_info("mcListbox.row.insert([4,5,7])")
-    #
-    # mcListbox.update_row(0, [7, 8, 9])
-    # show_info("mcListbox.update_row(0, [4,5,6])")
-    #
-    # mcListbox.update([[1, 2, 3], [4, 5, 6]])
-    # show_info("mcListbox.update([[1,2,3], [4,5,6]])")
-    #
-    # mcListbox.select_row(0)
-    # show_info("mcListbox.select_row(0)")
-    #
-    # print("mcListbox.selected_rows")
-    # print(mcListbox.selected_rows)
-    # print("\n")
-    #
-    # print("mcListbox.table_data")
-    # print(mcListbox.table_data)
-    # print("\n")
-    #
-    # print("mcListbox.row[0]")
-    # print(mcListbox.row[0])
-    # print("\n")
-    #
-    # print("mcListbox.row_data(0)")
-    # print(mcListbox.row_data(0))
-    # print("\n")
-    #
-    # print("mcListbox.column[1]")
-    # print(mcListbox.column[1])
-    # print("\n")
-    #
-    # print("mcListbox[0,1]")
-    # print(mcListbox[0, 1])
-    # print("\n")
-    #
-    # mcListbox.column[1] = ["item1", "item2"]
-    #
-    # mcListbox.update_column(2, [8, 9])
-    # show_info("mcListbox.update_column(2, [8,9])")
-    #
-    # mcListbox.clear()
-    # show_info("mcListbox.clear()")
-    #
-    # mcListbox.table_data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    # show_info("mcListbox.table_data = [[1,2,3], [4,5,6], [7,8,9]]")
-    #
-    # mcListbox.delete_row(1)
-    # show_info("mcListbox.delete_row(1)")
-    #
-    # row = mcListbox.row[0].update([2, 4, 5])
-    # show_info("mcListbox.row[0].update([2,4,5])")
-    #
-    # mcListbox.destroy()
-
     # The next table is editable: Click on the table to edit the cell
     table = Tk_Table(root, ["column one", "column two", "column three"], row_numbers=True,
                      stripped_rows=("white", "#f2f2f2"), select_mode="none")
