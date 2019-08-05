@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use("TkAgg")
+from mpl_toolkits.mplot3d import axes3d, Axes3D
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.backend_bases import MouseEvent

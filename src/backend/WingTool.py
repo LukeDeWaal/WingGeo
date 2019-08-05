@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import axes3d, Axes3D
 from typing import Union
 from backend.NumericalTools import linear_interpolation
 from backend.AirFoilTool import FiveDigitNACA, FourDigitNACA, LoadedAirfoil
@@ -458,7 +459,7 @@ class Wing(object):
     def plot_wing(self, fig=None):
 
         fig = plt.figure() if fig is None else fig
-        ax = fig.gca(projection='3d')
+        ax = fig.add_subplot(111, projection='3d')
         arr = self.data_container.get_array()
         ax.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
 

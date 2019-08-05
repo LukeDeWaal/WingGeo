@@ -7,10 +7,10 @@ from scipy import interpolate
 from typing import Union
 
 if sys.platform == 'win32':
-    datafiles_path = '\\'.join(os.getcwd().split('\\')[:-2]) + '\\data\\AirfoilCoordinates\\processed'
+    datafiles_path = '\\'.join(__file__.split('/')[:-3]) + '\\data\\AirfoilCoordinates\\processed'
 
 else:
-    datafiles_path = '/'.join(os.getcwd().split('/')[:-2]) + 'data/AirfoilCoordinates/processed'
+    datafiles_path = '/'.join(__file__.split('/')[:-3]) + 'data/AirfoilCoordinates/processed'
 
 AIRFOILS = [file.split('.')[0] for file in os.listdir(datafiles_path)]
 
@@ -162,10 +162,10 @@ class NACAFoil(AirFoil):
         elif self.__n == 5:
 
             if sys.platform == 'win32':
-                datafile = '\\'.join(os.getcwd().split('\\')[:-1])+'\\data\\fivedigit_coefficients.json'
+                datafile = '\\'.join(datafiles_path.split('\\')[:-3])+'\\data\\fivedigit_coefficients.json'
 
             else:
-                datafile = '/'.join(os.getcwd().split('/')[:-1]) + 'data/fivedigit_coefficients.json'
+                datafile = '/'.join(datafiles_path.split('/')[:-3]) + 'data/fivedigit_coefficients.json'
 
             with open(datafile, 'r') as file:
                 coefficients = json.load(file)[self.code[0:3]]
