@@ -1,0 +1,33 @@
+{
+  "Airfoils": {
+    "function": null
+  },
+  "Chord": {
+    "function": null,
+    "tweak": {
+      "dx": [0,0,0],
+      "dy": [0,0,0]
+    }
+  },
+  "Sweep": {
+    "function": null,
+    "tweak": {
+      "dx": [0,0,0],
+      "dy": [0,0,0]
+    }
+  },
+  "Twist": {
+    "function": null,
+    "tweak": {
+      "dx": [0,0,0],
+      "dy": [0,0,0]
+    }
+  },
+  "Dihedral": {
+    "function": null,
+    "tweak": {
+      "dx": [0,0,0],
+      "dy": [0,0,0]
+    }
+  }
+}

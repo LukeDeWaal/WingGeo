@@ -6,12 +6,12 @@ import pandas as pd
 from scipy import interpolate
 from typing import Union
 
-if sys.platform == 'win32':
-    datafiles_path = '\\'.join(__file__.split('/')[:-3]) + '\\data\\AirfoilCoordinates\\processed'
 
-else:
-    datafiles_path = '/'.join(__file__.split('/')[:-3]) + 'data/AirfoilCoordinates/processed'
+datafolder_path = '\\'.join(__file__.split('/')[:-3]) if len(__file__.split('/')) > 1 else '\\'.join(__file__.split('\\')[:-3])
+datafiles_path = datafolder_path + '\\data\\AirfoilCoordinates\\processed'
 
+# datafiles_path = '/'.join(__file__.split('/')[:-3]) + 'data/AirfoilCoordinates/processed'
+print(__file__, datafiles_path)
 AIRFOILS = [file.split('.')[0] for file in os.listdir(datafiles_path)]
 
 
@@ -373,7 +373,7 @@ class LoadedAirfoil(AirFoil):
 if __name__ == '__main__':
 
     test4d = FourDigitNACA('3210', chord=4)
-    a = test4d.load_coordinates(cosine_spacing=True)
+    a = test4d.load_coordinates(cosine_spacing=False)
 
     test5d = FiveDigitNACA(23012, chord=1)
     b = test5d.load_coordinates(cosine_spacing=True)

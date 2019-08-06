@@ -4,13 +4,15 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.backend_bases import MouseEvent
-from matplotlib import style
-style.use('ggplot')
+import matplotlib.animation as animation
+# from matplotlib import style
+# style.use('ggplot')
 
 import numpy as np
 import math
 import tkinter as tk
 from tkinter import ttk
+import ttkwidgets as ttkw
 
 from backend.WingTool import Wing
 from frontend.TkTable import Tk_Table
@@ -408,59 +410,125 @@ class WingEditor(tk.Tk):
 
     def __init__(self, *args, **kwargs):
 
+        # Backend Initialization
         self.wing = Wing()
+        self.wing.set_span_discretization(np.linspace(0, 10, 21))
+        self.wing.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(self.wing.b**2)))
+        self.wing.set_twist(0)
+        self.wing.set_airfoil('e1213')
+        self.wing.set_dihedral(0.1)
+        self.wing.set_sweep(0)
+        self.wing.construct()
 
+        # Setting up Frontend
         super().__init__(*args, **kwargs)
-        # self.geometry(ROOT_GEO)
-
-        self.rowconfigure(0, weight=1)
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-
         tk.Tk.wm_title(self, "WingGeo Editor")
 
-        self.wing = Wing()
-        self.discretization = None
-
-        self.plot_container = tk.Frame(self)
-        self.plot_container.grid(row=0, column=0)
-
-        self.editor_container = tk.Frame(self)
-        self.editor_container.grid(row=0, column=1)
-        self.editor_container.grid_columnconfigure(1, weight=1)
-        self.editor_container.grid_rowconfigure(0, weight=1)
-        self.editor_container.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=10)
+        self.grid_columnconfigure(1, weight=10)
+        self.grid_columnconfigure(2, weight=2)
 
         # Menu Bar Creation
-        self.menubar = tk.Menu(self.master)
+        self.menubar = tk.Menu(self)
         self.config(menu=self.menubar)
 
         # File Menu
         fileMenu = tk.Menu(self.menubar)
         fileMenu.config(tearoff=False)
-        fileMenu.add_command(label="Exit", command=lambda: quit())
+        fileMenu.add_command(label="Exit", command=lambda: self.quit())
         self.menubar.add_cascade(label="File", menu=fileMenu)
 
-        """
-        Plotting Frame
-        """
-        fig = Figure(figsize=(5, 5), dpi=100)
+        # 3D Plot
+        self.plot3d_container = tk.Frame(self)
+        self.plot3d_container.grid_columnconfigure(0, weight=1)
+        self.plot3d_container.grid_rowconfigure(0, weight=1)
+        self.plot3d_container.grid(row=0, column=0, sticky='NSEW')
 
-        canvas = FigureCanvasTkAgg(fig, self.plot_container)
-        canvas.draw()
+        self.fig_3d = Figure(figsize=(5, 5), dpi=100)
 
-        self.plot3d = fig.add_subplot(111, projection="3d")
+        canvas3d = FigureCanvasTkAgg(self.fig_3d, self.plot3d_container)
+        canvas3d.draw()
 
-        toolbar = NavigationToolbar2Tk(canvas, self.plot_container)
+        self.plot3d = self.fig_3d.add_subplot(111, projection="3d")
+
+        toolbar = NavigationToolbar2Tk(canvas3d, self.plot3d_container)
         toolbar.update()
+        canvas3d._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas3d.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
-        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        # 2D Plot Creation
+        self.plot2d_container = tk.Frame(self)
+        self.plot2d_container.grid_columnconfigure(0, weight=10)
+        self.plot2d_container.grid_columnconfigure(1, weight=1)
+        self.plot2d_container.grid_rowconfigure(0, weight=1)
+        self.plot2d_container.grid(
+            row=0,
+            column=1,
+            sticky='NSEW'
+        )
 
+        self.fig_2d = Figure(figsize=(5, 5), dpi=100)
 
-        """
-        Editing Frame
-        """
+        canvas2d = FigureCanvasTkAgg(self.fig_2d, self.plot2d_container)
+        canvas2d.draw()
+
+        self.plots2d = {}
+        self.top_plot2d = self.fig_2d.add_subplot(311)
+        self.front_plot2d = self.fig_2d.add_subplot(312, sharex=self.top_plot2d)
+        self.side_plot2d = self.fig_2d.add_subplot(313)
+
+        self.plots2d['topdown']   = self.top_plot2d
+        self.plots2d['front'] = self.front_plot2d
+        self.plots2d['side']  = self.side_plot2d
+
+        for key, plot in self.plots2d.items():
+            plot.grid()
+
+        toolbar = NavigationToolbar2Tk(canvas2d, self.plot2d_container)
+        toolbar.update()
+        canvas2d._tkcanvas.pack(
+            side=tk.TOP,
+            fill=tk.BOTH,
+            expand=True
+        )
+
+        # Slider
+        self.button_frame = tk.Frame(self)
+        nrows = 3
+        for row in range(nrows):
+            self.button_frame.grid_rowconfigure(row, weight=1)
+        self.button_frame.grid_columnconfigure(0, weight=1)
+        self.button_frame.grid(
+            row=0,
+            column=2,
+            sticky='NSEW'
+        )
+
+        self.span_slider = ttkw.TickScale(
+            self.button_frame,
+            from_=0,
+            to=10,
+            tickinterval=8,
+            orient=tk.VERTICAL
+            # resolution=0.2
+        )
+        self.span_slider.grid(
+            row=2,
+            column=1,
+            sticky='NSEW'
+        )
+
+        self.display = tk.Label(
+            self.button_frame,
+            text=str(round(self.span_slider.get(), 4))
+        )
+        self.display.grid(
+            row=1,
+            column=0,
+            sticky='S'
+        )
+
         self.parameter_label_texts = [
             'Span',
             'Airfoil Steps',
@@ -472,223 +540,59 @@ class WingEditor(tk.Tk):
             'Dihedral',
         ]
 
-        self.parameter_labels = {}
-        self.parameter_entries = {}
-        self.parameter_variables = {label: tk.StringVar() for label in self.parameter_label_texts[:2]}
-
-        SPACING = (5, 20)
-
-        for idx, label in enumerate(self.parameter_label_texts):
-
-            self.parameter_labels[label] = ttk.Label(
-                                                self.editor_container,
-                                                text=label
-                                          )
-
-            self.parameter_labels[label].grid(
-                row=idx,
-                column=0,
-                sticky='N',
-                padx=SPACING[0],
-                pady=SPACING[1]
-            )
-
-            if 0 <= idx <= 1:
-                self.parameter_entries[label] = ttk.Entry(
-                                                    self.editor_container,
-                                                    textvariable=self.parameter_variables[label]
-                                                )
-
-                self.parameter_variables[label].set(10)
-                self.parameter_entries[label].grid(
-                    row=idx,
-                    column=1,
-                    sticky='N',
-                    padx=SPACING[0],
-                    pady=SPACING[1]
-                )
-
-            else:
-
-                if label == "Span Distr.":
-                    command = self.__open_span_editor
-
-                elif label == 'Airfoils':
-                    command = self.__open_airfoil_editor
-
-                elif label == 'Chord':
-                    command = self.__open_chord_editor
-
-                elif label == 'Sweep':
-                    command = self.__open_sweep_editor
-
-                elif label == 'Twist':
-                    command = self.__open_twist_editor
-
-                elif label == 'Dihedral':
-                    command = self.__open_dihedral_editor
-
-                else:
-                    raise ValueError("Unexpected Input")
-
-                self.parameter_entries[label] = ttk.Button(
-                    self.editor_container,
-                    text="Edit",
-                    command=command,
-                    state=tk.DISABLED if label != 'Span Distr.' else tk.NORMAL
-                )
-
-                self.parameter_entries[label].grid(
-                    row=idx,
-                    column=1,
-                    sticky='NSEW',
-                    padx=SPACING[0],
-                    pady=SPACING[1]
-                )
-
-        self.editor_container.columnconfigure(0, weight=1)
-        self.editor_container.columnconfigure(1, weight=1)
-
-        self.lower_box = tk.Frame(self.editor_container)
-        self.lower_box.grid(
-            row=len(self.parameter_labels),
-            column=0,
-            columnspan=2,
-            sticky='NSEW',
-            padx=SPACING[0],
-            pady=SPACING[1]
-        )
-
-        self.tickbox_frame = tk.Frame(self.lower_box)
-        self.tickbox_frame.grid(
-            row=0,
-            column=1,
-            sticky='NSEW'
-        )
-
-        self.refresh_button = ttk.Button(
-            self.lower_box,
-            text="Update",
-            command=self.__update_plot
-        )
-        self.refresh_button.grid(
-            row=0,
-            column=0
-        )
-        self.cosine_var = tk.BooleanVar()
-        self.cosine_var.set(False)
-
-        self.custom_var = tk.BooleanVar()
-        self.custom_var.set(False)
-
-        self.cosine_box = ttk.Checkbutton(
-            self.tickbox_frame,
-            text="Cosine Spacing",
-            var=self.cosine_var
-        )
-        self.cosine_box.grid(
-            row=0,
-            column=0,
-            sticky='W',
-            padx=5
-        )
-
-        self.custom_box = ttk.Checkbutton(
-            self.tickbox_frame,
-            text="Custom Grid",
-            var=self.custom_var
-        )
-        self.custom_box.grid(
-            row=1,
-            column=0,
-            sticky='W',
-            padx=5
-        )
-
-        for idx in range(len(self.parameter_labels)+1):
-            self.editor_container.rowconfigure(idx, weight=1)
-
-        self.parameter_variables['Span'].trace_add(
-            "write",
-            lambda name, index, mode: self.entry_box_change()
-        )
-        self.parameter_variables['Airfoil Steps'].trace_add(
-            "write",
-            lambda name, index, mode: self.entry_box_change()
-        )
-
-        self.editor_windows = {}
-
-
-    def __parser(self):
-        pass
-
-    def entry_box_change(self):
-        """
-        Keeps track of the the span and discretization values
-        and blocks further editing if necessary
-        """
-
-        if self.parameter_variables['Span'].get() == "" or \
-                self.parameter_variables['Airfoil Steps'].get() == "":
-
-            for label in self.parameter_label_texts[2:]:
-                self.parameter_entries[label].config(state=tk.DISABLED)
-
-        elif int(self.parameter_variables['Span'].get()) > 0 and \
-                int(self.parameter_variables['Airfoil Steps'].get()) > 0:
-
-            self.parameter_entries['Span Distr.'].config(state=tk.NORMAL)
-
-            state = tk.DISABLED if self.discretization is None else tk.NORMAL if isinstance(self.discretization, np.ndarray) else tk.DISABLED
-
-            for label in self.parameter_label_texts[3:]:
-                self.parameter_entries[label].config(state=state)
-
-        else:
-
-            for label in self.parameter_label_texts[3:]:
-                self.parameter_entries[label].config(state=tk.DISABLED)
+        # Finally
+        self.__plot()
+        #self.animation_3d = animation.FuncAnimation(self.fig_3d, lambda _: self.__plot_3d(), interval=1000)
+        #self.animation_2d = animation.FuncAnimation(self.fig_2d, lambda _: self.__plot_2d(), interval=1000)
 
     """
     Methods for opening the editor windows
     """
-    def __open_editor(self, name: str):
+    def __find_closest(self, yi, keys):
 
-        if name in self.editor_windows.keys():
-            self.editor_windows[name]['window'].update_plot()
-            self.editor_windows[name]['window'].deiconify()
+        i = 0
+        mindiff = float('inf')
+        while True:
+            diff = abs(yi - keys[i])
+            if diff < mindiff:
+                mindiff = float(diff)
+                i += 1
+                continue
 
-        else:
-            self.editor_windows[name] = {
-                'window': EditorWindow(self, name),
-                'state': False
-            }
-            self.editor_windows[name]['window'].protocol('WM_DELETE_WINDOW',
-                                                          self.editor_windows[name]['window'].withdraw)
+            return keys[i]
 
+    # TODO: Fix NANs in coordinates
+    def project_in_2d(self, array, dictionary, yi=None):
 
-    def __open_span_editor(self):
-        self.__open_editor('Span Distr.')
+        topdown_coordinates = array[(1,0), :]
+        front_coordinates = array[(1,2), :]
+        side_coordinates = [[],[]]
 
-    def __open_airfoil_editor(self):
-        self.__open_editor('Airfoils')
+        try:
+            side_coordinates[0] = list(dictionary[yi]['x'])
+            side_coordinates[1] = list(dictionary[yi]['z'])
 
-    def __open_chord_editor(self):
-        self.__open_editor('Chord')
+        except KeyError:
+            data = dictionary[self.__find_closest(yi, list(dictionary.keys()))]
+            side_coordinates[0] = list(data['x'])
+            side_coordinates[1] = list(reversed(data['z']))
 
-    def __open_sweep_editor(self):
-        self.__open_editor('Sweep')
+        return {
+            'topdown': topdown_coordinates,
+            'front': front_coordinates,
+            'side': np.array(side_coordinates)
+        }
 
-    def __open_twist_editor(self):
-        self.__open_editor('Twist')
+    def __plot_3d(self):
 
-    def __open_dihedral_editor(self):
-        self.__open_editor('Dihedral')
-
-    def __plot(self):
+        self.plot3d.clear()
+        for plot in self.plots2d.values():
+            plot.clear()
 
         arr = self.wing.data_container.get_array()
+        dictionary = self.wing.data_container.get_dictionary()
+
+        self.projections = self.project_in_2d(arr, dictionary, yi=self.span_slider.get())  # TODO: Link with slider
 
         self.plot3d.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
         self.wing.axisEqual3D(self.plot3d)
@@ -696,36 +600,43 @@ class WingEditor(tk.Tk):
         self.plot3d.set_ylabel('Y [m]')
         self.plot3d.set_zlabel('Z [m]')
 
-    def __update_plot(self):
+    def __plot_2d(self):
 
-        self.plot3d.clear()
+        self.display.config(text=str(round(self.span_slider.get(), 4)))
+        self.plots2d['topdown'].plot(
+            self.projections['topdown'][0, :],
+            self.projections['topdown'][1, :],
+            'ro'
+        )
+        self.plots2d['front'].plot(
+            self.projections['front'][0, :],
+            self.projections['front'][1, :],
+            'ro'
+        )
+        self.plots2d['side'].plot(
+            self.projections['side'][0, :],
+            self.projections['side'][1, :],
+            'ro'
+        )
 
-        # self.plot3d.plot(x, y, z)
-        print("Updating")
-        values = self.__parser()
-        print(values)
+        for key, plot in self.plots2d.items():
 
-        values['Span'] = float(self.parameter_variables['Span'].get())
-        values['Span Steps'] = int(self.parameter_variables['Span Steps'].get())
-        values['Airfoil Steps'] = int(self.parameter_variables['Airfoil Steps'].get())
+            if key != 'side':
+                plot.set_xlim(0, self.wing.get_span())
+            else:
+                plot.set_xlim(np.min(self.projections[key][0, :]), np.max(self.projections[key][0, :]))
 
-        self.wing.set_cosine_spacing(self.cosine_var.get())
+            minmax = (np.min(self.projections[key][1,:]), np.max(self.projections[key][1,:]))
+            print(minmax)
+            plot.set_ylim(min(minmax), max(minmax))
 
-        self.wing.set_spanwise_steps(values['Span Steps'])
-        self.wing.set_airfoil_steps(values['Airfoil Steps'])
+    def __plot(self):
 
-        self.wing.set_airfoil(values['Airfoils'])
-        self.wing.set_chord(values['Chord'])
-        self.wing.set_sweep(values['Sweep'])
-        self.wing.set_twist(values['Twist'])
-        self.wing.set_dihedral(values['Dihedral'])
-
-        self.wing.construct()
-        self.__plot()
+        self.__plot_3d()
+        #self.__plot_2d()
 
 
 if __name__ == "__main__":
 
     app = WingEditor()
-
     app.mainloop()

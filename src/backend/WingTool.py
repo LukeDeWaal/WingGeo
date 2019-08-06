@@ -109,6 +109,9 @@ class Wing(object):
     def __calculate_MAC(c: np.array):
         return np.average(c)
 
+    def get_span(self):
+        return self.b
+
     """
     The Following 4 Methods are for the correct assignment of the data describing the wing.
     All data is eventually stored in dictionaries but can be inputted as:
@@ -436,10 +439,10 @@ class Wing(object):
         self.__create_initial_wing()
         self.__shift_wing_horizontally(percent_chord=0.25)
 
-        while self.transformation_order:
-            self.transformation_order.pop()()
+        # while self.transformation_order:
+        #     self.transformation_order.pop()()
 
-        self.__shift_wing_horizontally(percent_chord=-0.25)
+        # self.__shift_wing_horizontally(percent_chord=-0.25)
 
     @staticmethod
     def axisEqual3D(ax):
