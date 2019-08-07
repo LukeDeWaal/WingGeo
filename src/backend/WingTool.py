@@ -399,7 +399,7 @@ class Wing(object):
 
         for (yi, values), ti in zip(data.items(), self.twist_distribution['twist']):
 
-            v = np.matmul(T(ti), np.array([values['x'], values['z']]))
+            v = np.matmul(T(np.deg2rad(ti)), np.array([values['x'], values['z']]))
             data[yi]['x'] = v[0, :]
             data[yi]['z'] = v[1, :]
 
@@ -414,7 +414,7 @@ class Wing(object):
 
         for (idx, key), alpha in zip(enumerate(keys[:-1]), self.sweep_distribution['sweep']):
 
-            delta_x = delta_x + (keys[idx+1] - key)*np.tan(alpha)
+            delta_x = delta_x + (keys[idx+1] - key)*np.tan(np.deg2rad(alpha))
 
             data[keys[idx+1]]['x'] -= delta_x
 
@@ -428,7 +428,7 @@ class Wing(object):
         keys = list(data.keys())
 
         for (idx, key), alpha in zip(enumerate(keys[:-1]), self.dihedral_distribution['dihedral']):
-            delta_z = delta_z + (keys[idx + 1] - key) * np.tan(alpha)
+            delta_z = delta_z + (keys[idx + 1] - key) * np.tan(np.deg2rad(alpha))
 
             data[keys[idx + 1]]['z'] += delta_z
 
@@ -478,9 +478,9 @@ if __name__ == '__main__':
     W = Wing()
     W.set_span_discretization(list(np.linspace(0, 20, 30))+list(np.linspace(20.1, 30, 30)))
     W.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(W.b**2)))
-    W.set_sweep(lambda y: 1-y/(W.b/3) if y < W.b/3 else (0 if y < 2*W.b/3 else 0.3))
-    W.set_dihedral(lambda y: y/W.b*0.5)
-    W.set_twist(lambda y: 0.1-0.1*y/W.b)
+    W.set_sweep(lambda y: 45*(1-y/(W.b/3)) if y < W.b/3 else (0 if y < 2*W.b/3 else 15))
+    W.set_dihedral(lambda y: y/W.b*30)
+    W.set_twist(lambda y: 10-10*y/W.b)
     W.set_airfoil('e1213')
     W.construct()
     W.plot_wing()

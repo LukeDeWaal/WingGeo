@@ -37,8 +37,10 @@ class InvalidUserInputError(Error):
     """
     pass
 
+"""
+DO NOT DELETE
 
-# TODO: Create editors
+
 class EditorWindow(tk.Toplevel):
 
     def __init__(self, root, name):
@@ -343,10 +345,6 @@ class EditorWindow(tk.Toplevel):
             self._points.pop(x)
 
     def _find_neighbor_point(self, event):
-        u""" Find point around mouse position
-        :rtype: ((int, int)|None)
-        :return: (x, y) if there are any point around mouse else None
-        """
         distance_threshold = 3.0
         nearest_point = None
         min_distance = float('inf')
@@ -360,9 +358,6 @@ class EditorWindow(tk.Toplevel):
         return None
 
     def _on_click(self, event):
-        u""" callback method for mouse click event
-        :type event: MouseEvent
-        """
         # left click
         if event.button == 1 and event.inaxes in [self.plot]:
             point = self._find_neighbor_point(event)
@@ -379,17 +374,12 @@ class EditorWindow(tk.Toplevel):
                 self.update_plot()
 
     def _on_release(self, event):
-        u""" callback method for mouse release event
-        :type event: MouseEvent
-        """
         if event.button == 1 and event.inaxes in [self.plot] and self._dragging_point:
             self._dragging_point = None
             self.update_plot()
 
     def _on_motion(self, event):
-        u""" callback method for mouse motion event
-        :type event: MouseEvent
-        """
+
         if not self._dragging_point:
             return
         if event.xdata is None or event.ydata is None:
@@ -406,6 +396,38 @@ class EditorWindow(tk.Toplevel):
         self._dragging_point = self._add_point(event)
         self.update_plot()
 
+"""
+
+
+class ConfigurationWindow(tk.Toplevel):
+
+    def __init__(self, master):
+
+        super().__init__(master=master)
+        self.protocol("WM_DELETE_WINDOW", self.iconify)
+
+        # TODO: Double sided?
+        # TODO: Stacks of wings?
+        # TODO: Spacing between?
+
+        pass
+
+
+class DesignWindow(tk.Toplevel):
+
+    def __init__(self, master):
+
+        super().__init__(master=master)
+        self.protocol("WM_DELETE_WINDOW", self.iconify)
+
+        # TODO: Function inputs
+        # TODO: Manual discretization input (table?)
+        # TODO: Airfoil Selection method
+        # --> # TODO: Airfoil SQL Database (Xavier?)
+        # TODO: Manual editing of functions (draggable plot?)
+
+        pass
+
 
 class WingEditor(tk.Tk):
 
@@ -414,11 +436,11 @@ class WingEditor(tk.Tk):
         # Backend Initialization
         self.wing = Wing()
         self.wing.set_span_discretization(np.linspace(0, 10, 21))
-        self.wing.set_chord(lambda y: 4-y/2 if y < 4 else 2 if 4 <= y < 6 else 2-(y-6)/2)
+        self.wing.set_chord(lambda y: 20-2*y)
         self.wing.set_twist(0)
         self.wing.set_airfoil('e1213')
-        self.wing.set_dihedral(0.1)
-        self.wing.set_sweep(lambda y: 0.45 if y < 4 else 0.3 if 4 <= y < 6 else 0.4)
+        self.wing.set_dihedral(6)
+        self.wing.set_sweep(lambda y: 75 if y < 4 else 40 if 4 <= y < 6 else 60)
         self.wing.construct()
 
         # Setting up Frontend
@@ -442,7 +464,7 @@ class WingEditor(tk.Tk):
         fileMenu.add_command(label="Load", command=lambda: self.__load())
         fileMenu.add_command(label="Import", command=lambda: self.__import())
         fileMenu.add_command(label="Export", command=lambda: self.__export())
-        fileMenu.add_command(label="Exit", command=lambda: self.destroy())
+        fileMenu.add_command(label="Exit", command=lambda: self.__exit())
         self.menubar.add_cascade(label="File", menu=fileMenu)
         
         # Edit Menu
@@ -557,11 +579,24 @@ class WingEditor(tk.Tk):
         ]
 
         # Finally
+
+        self.design_window = DesignWindow(self)
+        self.config_window = ConfigurationWindow(self)
+
+        self.design_window.iconify()
+        self.config_window.iconify()
+
         self.__plot()
         self.animation_3d = animation.FuncAnimation(self.fig_3d, lambda _: self.__plot_3d(), interval=1000)
         self.animation_2d = animation.FuncAnimation(self.fig_2d, lambda _: self.__plot_2d(), interval=300)
 
+        width, height = self.winfo_screenwidth(), self.winfo_screenheight()
+
+        self.geometry('%dx%d+0+0' % (width, height-100))
+        self.bind('<Escape>', lambda e: self.__exit())
+
     def __clear_plots(self):
+
         self.wing = Wing()
         self.plot3d.clear()
         for plot in self.plots2d.values():
@@ -569,10 +604,13 @@ class WingEditor(tk.Tk):
             plot.grid(True)
 
     def __design(self):
-        pass
+
+        self.design_window.deiconify()
+
 
     def __configure(self):
-        pass
+
+        self.config_window.deiconify()
 
     def __export(self):
         pass
@@ -585,6 +623,26 @@ class WingEditor(tk.Tk):
 
     def __load(self):
         pass
+
+    def __exit(self):
+
+        confirmation = tk.Toplevel(self)
+
+        confirmation.grid_rowconfigure(0, weight=1)
+        confirmation.grid_rowconfigure(1, weight=1)
+        confirmation.grid_columnconfigure(0, weight=1)
+
+        txt = tk.Label(confirmation, text="Are you sure?")
+        txt.grid(row=0, column=0, sticky='NSEW')
+
+        btnframe = tk.Frame(confirmation)
+        btnframe.grid(row=1, column=0, sticky='NSEW')
+
+        yesbtn = ttk.Button(btnframe, text="Yes", command=lambda: self.destroy())
+        nobtn = ttk.Button(btnframe, text="No", command=lambda: confirmation.destroy())
+
+        yesbtn.grid(row=0, column=0, sticky='NSEW')
+        nobtn.grid(row=0, column=1, sticky='NSEW')
 
     def __find_closest(self, yi, keys):
 
@@ -643,7 +701,7 @@ class WingEditor(tk.Tk):
         dictionary = self.wing.data_container.get_dictionary()
 
         if arr is not None and arr.size > 0:
-            self.projections = self.project_in_2d(arr, dictionary, yi=self.span_slider.get())  # TODO: Link with slider
+            self.projections = self.project_in_2d(arr, dictionary, yi=self.span_slider.get())
             self.plot3d.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
 
         else:
