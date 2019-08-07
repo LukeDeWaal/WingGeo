@@ -5,6 +5,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 from matplotlib.backend_bases import MouseEvent
 import matplotlib.animation as animation
+matplotlib.interactive(True)
 # from matplotlib import style
 # style.use('ggplot')
 
@@ -413,11 +414,11 @@ class WingEditor(tk.Tk):
         # Backend Initialization
         self.wing = Wing()
         self.wing.set_span_discretization(np.linspace(0, 10, 21))
-        self.wing.set_chord(lambda y: 3*np.sqrt(1-(y**2)/(self.wing.b**2)))
+        self.wing.set_chord(lambda y: 4-y/2 if y < 4 else 2 if 4 <= y < 6 else 2-(y-6)/2)
         self.wing.set_twist(0)
         self.wing.set_airfoil('e1213')
         self.wing.set_dihedral(0.1)
-        self.wing.set_sweep(0)
+        self.wing.set_sweep(lambda y: 0.45 if y < 4 else 0.3 if 4 <= y < 6 else 0.4)
         self.wing.construct()
 
         # Setting up Frontend
@@ -436,8 +437,22 @@ class WingEditor(tk.Tk):
         # File Menu
         fileMenu = tk.Menu(self.menubar)
         fileMenu.config(tearoff=False)
-        fileMenu.add_command(label="Exit", command=lambda: self.quit())
+        fileMenu.add_command(label="New", command=lambda: None)
+        fileMenu.add_command(label="Save", command=lambda: self.__save())
+        fileMenu.add_command(label="Load", command=lambda: self.__load())
+        fileMenu.add_command(label="Import", command=lambda: self.__import())
+        fileMenu.add_command(label="Export", command=lambda: self.__export())
+        fileMenu.add_command(label="Exit", command=lambda: self.destroy())
         self.menubar.add_cascade(label="File", menu=fileMenu)
+        
+        # Edit Menu
+        editMenu = tk.Menu(self.menubar)
+        editMenu.config(tearoff=False)
+        editMenu.add_command(label="Design Wing", command=lambda: self.__design())
+        editMenu.add_command(label="Configuration", command=lambda: self.__configure())
+        editMenu.add_command(label="Clear Plots", command=lambda: self.__clear_plots())
+        editMenu.add_command(label="Update Plots", command=lambda: self.__plot())
+        self.menubar.add_cascade(label="Edit", menu=editMenu)
 
         # 3D Plot
         self.plot3d_container = tk.Frame(self)
@@ -484,6 +499,7 @@ class WingEditor(tk.Tk):
 
         for key, plot in self.plots2d.items():
             plot.grid()
+            plot.autoscale(False)
 
         toolbar = NavigationToolbar2Tk(canvas2d, self.plot2d_container)
         toolbar.update()
@@ -509,7 +525,7 @@ class WingEditor(tk.Tk):
             self.button_frame,
             from_=0,
             to=10,
-            tickinterval=8,
+            tickinterval=0.5,
             orient=tk.VERTICAL
             # resolution=0.2
         )
@@ -526,7 +542,7 @@ class WingEditor(tk.Tk):
         self.display.grid(
             row=1,
             column=0,
-            sticky='S'
+            sticky='SE'
         )
 
         self.parameter_label_texts = [
@@ -542,18 +558,48 @@ class WingEditor(tk.Tk):
 
         # Finally
         self.__plot()
-        #self.animation_3d = animation.FuncAnimation(self.fig_3d, lambda _: self.__plot_3d(), interval=1000)
-        #self.animation_2d = animation.FuncAnimation(self.fig_2d, lambda _: self.__plot_2d(), interval=1000)
+        self.animation_3d = animation.FuncAnimation(self.fig_3d, lambda _: self.__plot_3d(), interval=1000)
+        self.animation_2d = animation.FuncAnimation(self.fig_2d, lambda _: self.__plot_2d(), interval=300)
 
-    """
-    Methods for opening the editor windows
-    """
+    def __clear_plots(self):
+        self.wing = Wing()
+        self.plot3d.clear()
+        for plot in self.plots2d.values():
+            plot.clear()
+            plot.grid(True)
+
+    def __design(self):
+        pass
+
+    def __configure(self):
+        pass
+
+    def __export(self):
+        pass
+
+    def __import(self):
+        pass
+
+    def __save(self):
+        pass
+
+    def __load(self):
+        pass
+
     def __find_closest(self, yi, keys):
 
         i = 0
         mindiff = float('inf')
         while True:
-            diff = abs(yi - keys[i])
+            if yi >= self.wing.get_span():
+                return keys[-1]
+
+            try:
+                diff = abs(yi - keys[i])
+
+            except IndexError:
+                return keys[-1]
+
             if diff < mindiff:
                 mindiff = float(diff)
                 i += 1
@@ -561,7 +607,6 @@ class WingEditor(tk.Tk):
 
             return keys[i]
 
-    # TODO: Fix NANs in coordinates
     def project_in_2d(self, array, dictionary, yi=None):
 
         topdown_coordinates = array[(1,0), :]
@@ -585,16 +630,25 @@ class WingEditor(tk.Tk):
 
     def __plot_3d(self):
 
-        self.plot3d.clear()
-        for plot in self.plots2d.values():
-            plot.clear()
+        if self.plot3d.collections:
+            xlim, ylim = self.plot3d.get_xlim(), self.plot3d.get_ylim()
+            self.plot3d.clear()
+            self.plot3d.set_xlim(*xlim)
+            self.plot3d.set_ylim(*ylim)
+
+        else:
+            self.plot3d.clear()
 
         arr = self.wing.data_container.get_array()
         dictionary = self.wing.data_container.get_dictionary()
 
-        self.projections = self.project_in_2d(arr, dictionary, yi=self.span_slider.get())  # TODO: Link with slider
+        if arr is not None and arr.size > 0:
+            self.projections = self.project_in_2d(arr, dictionary, yi=self.span_slider.get())  # TODO: Link with slider
+            self.plot3d.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
 
-        self.plot3d.scatter(arr[0, :], arr[1, :], arr[2, :], c='r', marker='o')
+        else:
+            self.projections = None
+
         self.wing.axisEqual3D(self.plot3d)
         self.plot3d.set_xlabel('X [m]')
         self.plot3d.set_ylabel('Y [m]')
@@ -602,38 +656,54 @@ class WingEditor(tk.Tk):
 
     def __plot_2d(self):
 
-        self.display.config(text=str(round(self.span_slider.get(), 4)))
-        self.plots2d['topdown'].plot(
-            self.projections['topdown'][0, :],
-            self.projections['topdown'][1, :],
-            'ro'
-        )
-        self.plots2d['front'].plot(
-            self.projections['front'][0, :],
-            self.projections['front'][1, :],
-            'ro'
-        )
-        self.plots2d['side'].plot(
-            self.projections['side'][0, :],
-            self.projections['side'][1, :],
-            'ro'
-        )
-
         for key, plot in self.plots2d.items():
 
-            if key != 'side':
-                plot.set_xlim(0, self.wing.get_span())
-            else:
-                plot.set_xlim(np.min(self.projections[key][0, :]), np.max(self.projections[key][0, :]))
+            if plot.lines:
+                xlim, ylim = plot.get_xlim(), plot.get_ylim()
+                plot.clear()
+                plot.set_xlim(*xlim)
+                plot.set_ylim(*ylim)
 
-            minmax = (np.min(self.projections[key][1,:]), np.max(self.projections[key][1,:]))
-            print(minmax)
-            plot.set_ylim(min(minmax), max(minmax))
+            else:
+                plot.axis('equal')
+
+            plot.grid(True)
+
+            if key == 'side':
+                plot.set_xlabel('X [m]')
+                plot.set_ylabel('Z [m]')
+
+            else:
+                plot.set_xlabel('Y [m]')
+                if key == 'front':
+                    plot.set_ylabel('Z [m]')
+                else:
+                    plot.set_ylabel('X [m]')
+
+        self.display.config(text=str(round(self.span_slider.get(), 4))+' [m]')
+
+        if self.projections is not None:
+            self.plots2d['topdown'].plot(
+                self.projections['topdown'][0, :],
+                self.projections['topdown'][1, :],
+                'ro'
+            )
+            self.plots2d['front'].plot(
+                self.projections['front'][0, :],
+                self.projections['front'][1, :],
+                'ro'
+            )
+            self.plots2d['side'].plot(
+                self.projections['side'][0, :],
+                self.projections['side'][1, :],
+                'ro'
+            )
 
     def __plot(self):
 
         self.__plot_3d()
-        #self.__plot_2d()
+        self.__plot_2d()
+        self.update()
 
 
 if __name__ == "__main__":

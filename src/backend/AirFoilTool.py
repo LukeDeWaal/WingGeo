@@ -83,6 +83,7 @@ class AirFoil(object):
             'x': xnew,
             'z': np.concatenate((upper_spline(xnew[:idx_t_new]), lower_spline(xnew[idx_t_new:])))
         }
+        self.coordinates['z'][np.isnan(self.coordinates['z'])] = 0
 
         return self.coordinates
 
@@ -353,7 +354,6 @@ class LoadedAirfoil(AirFoil):
 
         airfoils = AIRFOILS
 
-        print(self.code)
         if self.code not in airfoils:
             raise ValueError("Specified Airfoil not found in database")
 
@@ -366,9 +366,10 @@ class LoadedAirfoil(AirFoil):
                                       names=['x', 'z'],
                                       dtype=float)
 
-        return {"x": np.array(coordinates['x'], dtype=float),
+        data = {"x": np.array(coordinates['x'], dtype=float),
                 "z": np.array(coordinates['z'], dtype=float)}
 
+        return data
 
 if __name__ == '__main__':
 

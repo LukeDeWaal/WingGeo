@@ -439,8 +439,8 @@ class Wing(object):
         self.__create_initial_wing()
         self.__shift_wing_horizontally(percent_chord=0.25)
 
-        # while self.transformation_order:
-        #     self.transformation_order.pop()()
+        while self.transformation_order:
+            self.transformation_order.pop()()
 
         # self.__shift_wing_horizontally(percent_chord=-0.25)
 
