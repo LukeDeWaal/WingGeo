@@ -436,11 +436,11 @@ class WingEditor(tk.Tk):
         # Backend Initialization
         self.wing = Wing()
         self.wing.set_span_discretization(np.linspace(0, 10, 21))
-        self.wing.set_chord(lambda y: 20-2*y)
+        self.wing.set_chord(lambda y: 6-5.5*y/self.wing.b)
         self.wing.set_twist(0)
         self.wing.set_airfoil('e1213')
         self.wing.set_dihedral(6)
-        self.wing.set_sweep(lambda y: 75 if y < 4 else 40 if 4 <= y < 6 else 60)
+        self.wing.set_sweep(lambda y: 45 if y < 4 else 40 if 4 <= y < 6 else 50)
         self.wing.construct()
 
         # Setting up Frontend
@@ -475,6 +475,12 @@ class WingEditor(tk.Tk):
         editMenu.add_command(label="Clear Plots", command=lambda: self.__clear_plots())
         editMenu.add_command(label="Update Plots", command=lambda: self.__plot())
         self.menubar.add_cascade(label="Edit", menu=editMenu)
+
+        # Editing Windows
+        self.design_window = DesignWindow(self)
+        self.config_window = ConfigurationWindow(self)
+        self.design_window.iconify()
+        self.config_window.iconify()
 
         # 3D Plot
         self.plot3d_container = tk.Frame(self)
@@ -579,13 +585,6 @@ class WingEditor(tk.Tk):
         ]
 
         # Finally
-
-        self.design_window = DesignWindow(self)
-        self.config_window = ConfigurationWindow(self)
-
-        self.design_window.iconify()
-        self.config_window.iconify()
-
         self.__plot()
         self.animation_3d = animation.FuncAnimation(self.fig_3d, lambda _: self.__plot_3d(), interval=1000)
         self.animation_2d = animation.FuncAnimation(self.fig_2d, lambda _: self.__plot_2d(), interval=300)
